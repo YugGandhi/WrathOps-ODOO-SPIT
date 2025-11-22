@@ -19,6 +19,7 @@ import ProductDetails from "@/pages/product-details";
 import ProductForm from "@/pages/product-form";
 import Manufacturing from "@/pages/manufacturing";
 import ManufacturingDetails from "@/pages/manufacturing-details";
+import ManufacturingForm from "@/pages/manufacturing-form";
 import StockMoves from "@/pages/stock-moves";
 import StockMoveForm from "@/pages/stock-move-form";
 import Purchase from "@/pages/purchase";
@@ -56,6 +57,7 @@ function AppRouter() {
       
       {/* Manufacturing routes */}
       <Route path="/manufacturing" component={Manufacturing} />
+      <Route path="/manufacturing/new" component={ManufacturingForm} />
       <Route path="/manufacturing/:id" component={ManufacturingDetails} />
       
       {/* Stock moves */}
