@@ -31,9 +31,19 @@ export default function Manufacturing() {
   const { data: manufacturingOrders = [], isLoading } = useQuery({
     queryKey: ["manufacturing-orders"],
     queryFn: async () => {
-      const response = await fetch("/api/manufacturing-orders");
-      if (!response.ok) throw new Error("Failed to fetch manufacturing orders");
-      return response.json();
+      try {
+        const response = await fetch("/api/manufacturing-orders");
+        if (!response.ok) {
+          console.error("Manufacturing orders fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch manufacturing orders: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Manufacturing - Fetched orders:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Manufacturing - Fetch error:", error);
+        throw error;
+      }
     },
   });
 

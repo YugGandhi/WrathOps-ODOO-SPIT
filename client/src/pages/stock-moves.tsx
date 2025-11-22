@@ -22,18 +22,38 @@ export default function StockMoves() {
   const { data: stockMoves = [], isLoading: movesLoading } = useQuery({
     queryKey: ["stock-moves"],
     queryFn: async () => {
-      const response = await fetch("/api/stock-moves");
-      if (!response.ok) throw new Error("Failed to fetch stock moves");
-      return response.json();
+      try {
+        const response = await fetch("/api/stock-moves");
+        if (!response.ok) {
+          console.error("Stock moves fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch stock moves: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Stock Moves - Fetched stock moves:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Stock Moves - Fetch error:", error);
+        throw error;
+      }
     },
   });
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await fetch("/api/products");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/products");
+        if (!response.ok) {
+          console.error("Products fetch failed:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Stock Moves - Fetched products:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Stock Moves - Products fetch error:", error);
+        return [];
+      }
     },
   });
 

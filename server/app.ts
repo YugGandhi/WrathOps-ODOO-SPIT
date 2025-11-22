@@ -1,3 +1,4 @@
+import "dotenv/config"; // Load .env file
 import { type Server } from "node:http";
 
 import express, {

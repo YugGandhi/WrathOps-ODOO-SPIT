@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertProductSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertWarehouseSchema, insertLocationSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -170,7 +170,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Products endpoints
   app.get("/api/products", async (req, res) => {
     try {
+      console.log("📦 GET /api/products called");
       const products = await storage.getAllProducts();
+      console.log(`📦 Returning ${products.length} products`);
       res.json(products);
     } catch (error) {
       console.error("Get products error:", error);
@@ -608,7 +610,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Warehouses endpoints
   app.get("/api/warehouses", async (req, res) => {
     try {
+      console.log("🏭 GET /api/warehouses called");
       const warehouses = await storage.getAllWarehouses();
+      console.log(`🏭 Returning ${warehouses.length} warehouses`);
       res.json(warehouses);
     } catch (error) {
       console.error("Get warehouses error:", error);
@@ -631,7 +635,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/warehouses", async (req, res) => {
     try {
-      const warehouse = await storage.createWarehouse(req.body);
+      const result = insertWarehouseSchema.safeParse(req.body);
+      if (!result.success) {
+        const validationError = fromZodError(result.error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      const warehouse = await storage.createWarehouse(result.data);
       res.status(201).json(warehouse);
     } catch (error) {
       console.error("Create warehouse error:", error);
@@ -639,10 +648,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/warehouses/:id", async (req, res) => {
+    try {
+      const warehouse = await storage.updateWarehouse(req.params.id, req.body);
+      if (!warehouse) {
+        return res.status(404).json({ error: "Warehouse not found" });
+      }
+      res.json(warehouse);
+    } catch (error) {
+      console.error("Update warehouse error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/warehouses/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteWarehouse(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Warehouse not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete warehouse error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Locations endpoints
+  console.log("📍 Registering /api/locations route");
+  app.get("/api/locations", async (req, res) => {
+    try {
+      console.log("📍 GET /api/locations called");
+      const warehouseId = req.query.warehouseId as string | undefined;
+      console.log("📍 Warehouse ID filter:", warehouseId);
+      const locations = warehouseId
+        ? await storage.getLocationsByWarehouse(warehouseId)
+        : await storage.getAllLocations();
+      console.log("📍 Returning locations:", locations.length);
+      res.json(locations);
+    } catch (error) {
+      console.error("Get locations error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/locations/:id", async (req, res) => {
+    try {
+      const location = await storage.getLocation(req.params.id);
+      if (!location) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+      res.json(location);
+    } catch (error) {
+      console.error("Get location error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/locations", async (req, res) => {
+    try {
+      const result = insertLocationSchema.safeParse(req.body);
+      if (!result.success) {
+        const validationError = fromZodError(result.error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      const location = await storage.createLocation(result.data);
+      res.status(201).json(location);
+    } catch (error) {
+      console.error("Create location error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/locations/:id", async (req, res) => {
+    try {
+      const location = await storage.updateLocation(req.params.id, req.body);
+      if (!location) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+      res.json(location);
+    } catch (error) {
+      console.error("Update location error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/locations/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteLocation(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete location error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Receipts endpoints
   app.get("/api/receipts", async (req, res) => {
     try {
+      console.log("📋 GET /api/receipts called");
       const receipts = await storage.getAllReceipts();
+      console.log(`📋 Returning ${receipts.length} receipts`);
       res.json(receipts);
     } catch (error) {
       console.error("Get receipts error:", error);
@@ -752,7 +861,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delivery Orders endpoints
   app.get("/api/delivery-orders", async (req, res) => {
     try {
+      console.log("🚚 GET /api/delivery-orders called");
       const orders = await storage.getAllDeliveryOrders();
+      console.log(`🚚 Returning ${orders.length} delivery orders`);
       res.json(orders);
     } catch (error) {
       console.error("Get delivery orders error:", error);
@@ -860,5 +971,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  console.log("✅ All API routes registered");
   return httpServer;
 }

@@ -44,9 +44,19 @@ export default function Dashboard() {
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await fetch("/api/products");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/products");
+        if (!response.ok) {
+          console.error("Products fetch failed:", response.status, response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Dashboard - Fetched products:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Dashboard - Products fetch error:", error);
+        return [];
+      }
     },
   });
 
@@ -54,9 +64,19 @@ export default function Dashboard() {
   const { data: receipts = [] } = useQuery({
     queryKey: ["receipts"],
     queryFn: async () => {
-      const response = await fetch("/api/receipts");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/receipts");
+        if (!response.ok) {
+          console.error("Receipts fetch failed:", response.status, response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Dashboard - Fetched receipts:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Dashboard - Receipts fetch error:", error);
+        return [];
+      }
     },
   });
 
@@ -64,9 +84,19 @@ export default function Dashboard() {
   const { data: deliveries = [] } = useQuery({
     queryKey: ["delivery-orders"],
     queryFn: async () => {
-      const response = await fetch("/api/delivery-orders");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/delivery-orders");
+        if (!response.ok) {
+          console.error("Deliveries fetch failed:", response.status, response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Dashboard - Fetched deliveries:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Dashboard - Deliveries fetch error:", error);
+        return [];
+      }
     },
   });
 
@@ -74,9 +104,19 @@ export default function Dashboard() {
   const { data: stockMoves = [] } = useQuery({
     queryKey: ["stock-moves"],
     queryFn: async () => {
-      const response = await fetch("/api/stock-moves");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/stock-moves");
+        if (!response.ok) {
+          console.error("Stock moves fetch failed:", response.status, response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Dashboard - Fetched stock moves:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Dashboard - Stock moves fetch error:", error);
+        return [];
+      }
     },
   });
 

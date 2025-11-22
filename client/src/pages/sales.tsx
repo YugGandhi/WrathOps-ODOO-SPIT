@@ -43,9 +43,19 @@ export default function Sales() {
   const { data: salesOrders = [], isLoading } = useQuery({
     queryKey: ["sales-orders"],
     queryFn: async () => {
-      const response = await fetch("/api/sales-orders");
-      if (!response.ok) throw new Error("Failed to fetch sales orders");
-      return response.json();
+      try {
+        const response = await fetch("/api/sales-orders");
+        if (!response.ok) {
+          console.error("Sales orders fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch sales orders: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Sales - Fetched sales orders:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Sales - Fetch error:", error);
+        throw error;
+      }
     },
   });
 
@@ -53,9 +63,19 @@ export default function Sales() {
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
     queryFn: async () => {
-      const response = await fetch("/api/contacts?type=Customer");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/contacts?type=Customer");
+        if (!response.ok) {
+          console.error("Customers fetch failed:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Sales - Fetched customers:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Sales - Customers fetch error:", error);
+        return [];
+      }
     },
   });
 

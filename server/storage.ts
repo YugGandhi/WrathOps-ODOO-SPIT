@@ -1,3 +1,4 @@
+import "dotenv/config"; // Load .env file to ensure DATABASE_URL is available
 import {
   type User,
   type InsertUser,
@@ -36,6 +37,7 @@ import {
   type DeliveryLineItem,
   type InsertDeliveryLineItem,
 } from "@shared/schema";
+
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
@@ -655,12 +657,32 @@ export class MemStorage implements IStorage {
 // Use database storage if DATABASE_URL is set, otherwise use in-memory storage
 let storageInstance: IStorage;
 
-if (process.env.DATABASE_URL) {
+// Check DATABASE_URL with detailed logging
+const dbUrl = process.env.DATABASE_URL;
+console.log("🔍 Checking DATABASE_URL...");
+console.log("   DATABASE_URL exists:", !!dbUrl);
+console.log("   DATABASE_URL length:", dbUrl ? dbUrl.length : 0);
+
+// Initialize storage - use top-level await for ES modules
+if (dbUrl) {
   // Use database storage
-  const { DbStorage } = require("./db-storage");
-  storageInstance = new DbStorage();
+  console.log("✅ Using DATABASE storage (DbStorage)");
+  try {
+    // Use dynamic import with top-level await (supported by tsx)
+    const { DbStorage } = await import("./db-storage");
+    storageInstance = new DbStorage();
+    console.log("✅ DbStorage initialized successfully");
+  } catch (error: any) {
+    console.error("❌ Failed to initialize DbStorage:", error.message);
+    console.error("   Error stack:", error.stack);
+    console.log("⚠️  Falling back to MemStorage");
+    storageInstance = new MemStorage();
+  }
 } else {
   // Use in-memory storage
+  console.log("⚠️  Using IN-MEMORY storage (MemStorage) - DATABASE_URL not set!");
+  console.log("   Make sure .env file exists in the root directory");
+  console.log("   And contains: DATABASE_URL='...'");
   storageInstance = new MemStorage();
 }
 

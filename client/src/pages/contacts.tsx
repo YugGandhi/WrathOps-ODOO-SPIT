@@ -42,9 +42,19 @@ export default function Contacts() {
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ["contacts"],
     queryFn: async () => {
-      const response = await fetch("/api/contacts");
-      if (!response.ok) throw new Error("Failed to fetch contacts");
-      return response.json();
+      try {
+        const response = await fetch("/api/contacts");
+        if (!response.ok) {
+          console.error("Contacts fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch contacts: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Contacts - Fetched contacts:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Contacts - Fetch error:", error);
+        throw error;
+      }
     },
   });
 

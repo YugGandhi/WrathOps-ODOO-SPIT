@@ -16,6 +16,7 @@ import {
   contacts,
   companySettings,
   warehouses,
+  locations,
   receipts,
   receiptLineItems,
   deliveryOrders,
@@ -119,7 +120,53 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedWarehouses.length} warehouses`);
 
-    // 4. Seed Products (10 entries)
+    // 4. Seed Locations (multiple locations per warehouse)
+    console.log("Seeding locations...");
+    const locationData = [
+      // Main Warehouse locations
+      { name: "Zone A - Rack 1", shortcode: "MW-ZA-R1", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone A, Rack 1" },
+      { name: "Zone A - Rack 2", shortcode: "MW-ZA-R2", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone A, Rack 2" },
+      { name: "Zone B - Rack 1", shortcode: "MW-ZB-R1", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone B, Rack 1" },
+      { name: "Zone B - Rack 2", shortcode: "MW-ZB-R2", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone B, Rack 2" },
+      { name: "Zone C - Rack 1", shortcode: "MW-ZC-R1", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone C, Rack 1" },
+      { name: "Zone C - Rack 2", shortcode: "MW-ZC-R2", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone C, Rack 2" },
+      { name: "Zone D - Rack 1", shortcode: "MW-ZD-R1", warehouseId: insertedWarehouses[0]?.id || "", description: "Zone D, Rack 1" },
+      // East Coast Distribution locations
+      { name: "Receiving Area", shortcode: "EC-RCV", warehouseId: insertedWarehouses[1]?.id || "", description: "Receiving area" },
+      { name: "Storage Zone 1", shortcode: "EC-SZ1", warehouseId: insertedWarehouses[1]?.id || "", description: "Storage Zone 1" },
+      // West Coast Hub locations
+      { name: "Main Storage", shortcode: "WC-MAIN", warehouseId: insertedWarehouses[2]?.id || "", description: "Main storage area" },
+      { name: "Cold Storage", shortcode: "WC-COLD", warehouseId: insertedWarehouses[2]?.id || "", description: "Cold storage area" },
+      // Central Storage locations
+      { name: "Aisle 1", shortcode: "CS-A1", warehouseId: insertedWarehouses[3]?.id || "", description: "Aisle 1" },
+      { name: "Aisle 2", shortcode: "CS-A2", warehouseId: insertedWarehouses[3]?.id || "", description: "Aisle 2" },
+      // South Regional locations
+      { name: "Zone Alpha", shortcode: "SR-ZA", warehouseId: insertedWarehouses[4]?.id || "", description: "Zone Alpha" },
+      { name: "Zone Beta", shortcode: "SR-ZB", warehouseId: insertedWarehouses[4]?.id || "", description: "Zone Beta" },
+      // North Distribution locations
+      { name: "Section 1", shortcode: "ND-S1", warehouseId: insertedWarehouses[5]?.id || "", description: "Section 1" },
+      { name: "Section 2", shortcode: "ND-S2", warehouseId: insertedWarehouses[5]?.id || "", description: "Section 2" },
+      // Texas Facility locations
+      { name: "Building A", shortcode: "TF-BLD-A", warehouseId: insertedWarehouses[6]?.id || "", description: "Building A" },
+      { name: "Building B", shortcode: "TF-BLD-B", warehouseId: insertedWarehouses[6]?.id || "", description: "Building B" },
+      // Florida Depot locations
+      { name: "Warehouse Floor 1", shortcode: "FD-F1", warehouseId: insertedWarehouses[7]?.id || "", description: "Warehouse Floor 1" },
+      { name: "Warehouse Floor 2", shortcode: "FD-F2", warehouseId: insertedWarehouses[7]?.id || "", description: "Warehouse Floor 2" },
+    ];
+
+    const insertedLocations = [];
+    for (const location of locationData) {
+      try {
+        const result = await db.insert(locations).values(location).returning();
+        insertedLocations.push(result[0]);
+      } catch (error) {
+        const existing = await db.select().from(locations).where(eq(locations.shortcode, location.shortcode)).limit(1);
+        if (existing[0]) insertedLocations.push(existing[0]);
+      }
+    }
+    console.log(`✅ Inserted ${insertedLocations.length} locations`);
+
+    // 5. Seed Products (10 entries) - now using locationId
     console.log("Seeding products...");
     const productData = [
       { name: "Steel Rods 10mm", sku: "STEEL-10MM", category: "Raw Materials", unitOfMeasure: "Pieces", description: "High-grade steel rods 10mm diameter", onHandQuantity: 500, reservedQuantity: 50, pricePerUnit: "25.50", location: "MW-A1", minimumQuantity: 100, preferredSupplier: insertedContacts[0]?.id },
@@ -146,7 +193,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedProducts.length} products`);
 
-    // 5. Seed Company Settings (1 entry)
+    // 6. Seed Company Settings (1 entry)
     console.log("Seeding company settings...");
     const companyData = {
       companyName: "StockMaster Inc",
@@ -168,7 +215,7 @@ async function seed() {
       console.log("ℹ️ Company settings already exist");
     }
 
-    // 6. Seed Manufacturing Orders (8 entries)
+    // 7. Seed Manufacturing Orders (8 entries)
     console.log("Seeding manufacturing orders...");
     const manufacturingOrderData = [
       { reference: "MO-2024-001", contact: insertedContacts[0]?.id || "", scheduleDate: new Date("2024-02-15"), status: "In Progress", quantity: 100, unitOfMeasure: "Pieces", productId: insertedProducts[0]?.id },
@@ -193,7 +240,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedMOs.length} manufacturing orders`);
 
-    // 7. Seed MO Components (for each MO)
+    // 8. Seed MO Components (for each MO)
     console.log("Seeding MO components...");
     let moComponentCount = 0;
     for (const mo of insertedMOs) {
@@ -213,7 +260,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${moComponentCount} MO components`);
 
-    // 8. Seed MO Operations (for each MO)
+    // 9. Seed MO Operations (for each MO)
     console.log("Seeding MO operations...");
     let moOperationCount = 0;
     for (const mo of insertedMOs) {
@@ -235,7 +282,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${moOperationCount} MO operations`);
 
-    // 9. Seed Stock Moves (10 entries)
+    // 10. Seed Stock Moves (10 entries)
     console.log("Seeding stock moves...");
     const stockMoveData = [
       { date: new Date("2024-01-15"), reference: "SM-2024-001", fromLocation: "MW-A1", toLocation: "EC-A1", productId: insertedProducts[0]?.id || "", quantity: 50, status: "Done", type: "Internal" },
@@ -262,7 +309,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedStockMoves.length} stock moves`);
 
-    // 10. Seed Purchase Orders (8 entries)
+    // 11. Seed Purchase Orders (8 entries)
     console.log("Seeding purchase orders...");
     const purchaseOrderData = [
       { reference: "PO-2024-001", vendorId: insertedContacts[0]?.id || "", orderDate: new Date("2024-01-10"), status: "Received", total: "2550.00" },
@@ -287,7 +334,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedPOs.length} purchase orders`);
 
-    // 11. Seed PO Line Items (2-3 items per PO)
+    // 12. Seed PO Line Items (2-3 items per PO)
     console.log("Seeding PO line items...");
     let poLineItemCount = 0;
     const poProducts = [insertedProducts[0], insertedProducts[1], insertedProducts[2], insertedProducts[3], insertedProducts[4]];
@@ -311,7 +358,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${poLineItemCount} PO line items`);
 
-    // 12. Seed Sales Orders (8 entries)
+    // 13. Seed Sales Orders (8 entries)
     console.log("Seeding sales orders...");
     const salesOrderData = [
       { reference: "SO-2024-001", customerId: insertedContacts[5]?.id || "", orderDate: new Date("2024-01-12"), status: "Delivered", total: "510.00" },
@@ -336,7 +383,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedSOs.length} sales orders`);
 
-    // 13. Seed SO Line Items (2-3 items per SO)
+    // 14. Seed SO Line Items (2-3 items per SO)
     console.log("Seeding SO line items...");
     let soLineItemCount = 0;
     for (let i = 0; i < insertedSOs.length; i++) {
@@ -359,7 +406,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${soLineItemCount} SO line items`);
 
-    // 14. Seed Receipts (8 entries)
+    // 15. Seed Receipts (8 entries)
     console.log("Seeding receipts...");
     const receiptData = [
       { receiptNumber: "REC-2024-001", supplierId: insertedContacts[0]?.id || "", warehouseId: insertedWarehouses[0]?.id || "", scheduledDate: new Date("2024-01-10"), receiptDate: new Date("2024-01-10"), status: "Done" },
@@ -384,7 +431,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedReceipts.length} receipts`);
 
-    // 15. Seed Receipt Line Items (2-3 items per receipt)
+    // 16. Seed Receipt Line Items (2-3 items per receipt)
     console.log("Seeding receipt line items...");
     let receiptLineItemCount = 0;
     for (let i = 0; i < insertedReceipts.length; i++) {
@@ -407,7 +454,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${receiptLineItemCount} receipt line items`);
 
-    // 16. Seed Delivery Orders (8 entries)
+    // 17. Seed Delivery Orders (8 entries)
     console.log("Seeding delivery orders...");
     const deliveryOrderData = [
       { deliveryNumber: "DEL-2024-001", customerId: insertedContacts[5]?.id || "", deliveryDate: new Date("2024-01-12"), status: "Validated" },
@@ -432,7 +479,7 @@ async function seed() {
     }
     console.log(`✅ Inserted ${insertedDeliveries.length} delivery orders`);
 
-    // 17. Seed Delivery Line Items (2-3 items per delivery)
+    // 18. Seed Delivery Line Items (2-3 items per delivery)
     console.log("Seeding delivery line items...");
     let deliveryLineItemCount = 0;
     for (let i = 0; i < insertedDeliveries.length; i++) {
@@ -462,6 +509,7 @@ async function seed() {
     console.log(`   - Users: ${insertedUsers.length}`);
     console.log(`   - Contacts: ${insertedContacts.length}`);
     console.log(`   - Warehouses: ${insertedWarehouses.length}`);
+    console.log(`   - Locations: ${insertedLocations.length}`);
     console.log(`   - Products: ${insertedProducts.length}`);
     console.log(`   - Manufacturing Orders: ${insertedMOs.length}`);
     console.log(`   - MO Components: ${moComponentCount}`);

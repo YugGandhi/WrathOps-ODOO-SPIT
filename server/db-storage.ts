@@ -441,6 +441,38 @@ export class DbStorage implements IStorage {
     return result.length > 0;
   }
 
+  // Locations
+  async getAllLocations(): Promise<Location[]> {
+    return await db.select().from(locations);
+  }
+
+  async getLocation(id: string): Promise<Location | undefined> {
+    const result = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getLocationsByWarehouse(warehouseId: string): Promise<Location[]> {
+    return await db.select().from(locations).where(eq(locations.warehouseId, warehouseId));
+  }
+
+  async createLocation(location: InsertLocation): Promise<Location> {
+    const result = await db.insert(locations).values(location).returning();
+    return result[0];
+  }
+
+  async updateLocation(id: string, location: Partial<InsertLocation>): Promise<Location | undefined> {
+    const result = await db.update(locations)
+      .set(location)
+      .where(eq(locations.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteLocation(id: string): Promise<boolean> {
+    const result = await db.delete(locations).where(eq(locations.id, id)).returning();
+    return result.length > 0;
+  }
+
   // Receipts
   async getAllReceipts(): Promise<Receipt[]> {
     return await db.select().from(receipts).orderBy(receipts.receiptDate);

@@ -40,27 +40,57 @@ export default function Purchase() {
   const { data: receipts = [], isLoading: receiptsLoading } = useQuery({
     queryKey: ["receipts"],
     queryFn: async () => {
-      const response = await fetch("/api/receipts");
-      if (!response.ok) throw new Error("Failed to fetch receipts");
-      return response.json();
+      try {
+        const response = await fetch("/api/receipts");
+        if (!response.ok) {
+          console.error("Receipts fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch receipts: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Purchase - Fetched receipts:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Purchase - Receipts fetch error:", error);
+        throw error;
+      }
     },
   });
 
   const { data: warehouses = [] } = useQuery({
     queryKey: ["warehouses"],
     queryFn: async () => {
-      const response = await fetch("/api/warehouses");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/warehouses");
+        if (!response.ok) {
+          console.error("Warehouses fetch failed:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Purchase - Fetched warehouses:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Purchase - Warehouses fetch error:", error);
+        return [];
+      }
     },
   });
 
   const { data: contacts = [] } = useQuery({
     queryKey: ["contacts"],
     queryFn: async () => {
-      const response = await fetch("/api/contacts");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/contacts");
+        if (!response.ok) {
+          console.error("Contacts fetch failed:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Purchase - Fetched contacts:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Purchase - Contacts fetch error:", error);
+        return [];
+      }
     },
   });
 

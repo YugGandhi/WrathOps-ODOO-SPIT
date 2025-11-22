@@ -30,18 +30,38 @@ export default function Delivery() {
   const { data: deliveryOrders = [], isLoading: deliveriesLoading } = useQuery({
     queryKey: ["delivery-orders"],
     queryFn: async () => {
-      const response = await fetch("/api/delivery-orders");
-      if (!response.ok) throw new Error("Failed to fetch delivery orders");
-      return response.json();
+      try {
+        const response = await fetch("/api/delivery-orders");
+        if (!response.ok) {
+          console.error("Delivery orders fetch failed:", response.status, response.statusText);
+          throw new Error(`Failed to fetch delivery orders: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Delivery - Fetched delivery orders:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Delivery - Delivery orders fetch error:", error);
+        throw error;
+      }
     },
   });
 
   const { data: contacts = [] } = useQuery({
     queryKey: ["contacts"],
     queryFn: async () => {
-      const response = await fetch("/api/contacts");
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        const response = await fetch("/api/contacts");
+        if (!response.ok) {
+          console.error("Contacts fetch failed:", response.status);
+          return [];
+        }
+        const data = await response.json();
+        console.log("Delivery - Fetched contacts:", data?.length || 0, "items");
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Delivery - Contacts fetch error:", error);
+        return [];
+      }
     },
   });
 

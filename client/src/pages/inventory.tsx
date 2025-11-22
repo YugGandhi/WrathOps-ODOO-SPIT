@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,19 +15,57 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Search, Plus, Eye, Edit, Settings } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Inventory() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Fetch products
   const { data: products = [], isLoading, error } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await fetch("/api/products");
-      if (!response.ok) throw new Error("Failed to fetch products");
-      return response.json();
+      try {
+        const response = await fetch("/api/products");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+          console.error("Products fetch error:", errorData);
+          throw new Error(errorData.error || `Failed to fetch products: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Fetched products:", data);
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Products fetch exception:", error);
+        throw error;
+      }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch locations for display
+  const { data: locations = [] } = useQuery({
+    queryKey: ["locations"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/locations");
+        if (!response.ok) return [];
+        return response.json();
+      } catch (error) {
+        console.error("Locations fetch error:", error);
+        return [];
+      }
     },
   });
+
+  // Create location map
+  const locationsMap = locations.reduce((acc: Record<string, any>, loc: any) => {
+    acc[loc.id] = loc;
+    return acc;
+  }, {});
 
   const getLowStockBadge = (onHand: number, minimumQuantity?: number) => {
     const threshold = minimumQuantity || 10;
@@ -40,6 +78,15 @@ export default function Inventory() {
     }
     return null;
   };
+
+  // Debug: Log data on mount and when it changes
+  useEffect(() => {
+    console.log("=== INVENTORY DEBUG ===");
+    console.log("Products:", products);
+    console.log("Products length:", products.length);
+    console.log("Is loading:", isLoading);
+    console.log("Error:", error);
+  }, [products, isLoading, error]);
 
   const filteredProducts = products.filter((product: any) => {
     const searchLower = searchTerm.toLowerCase();
@@ -60,8 +107,22 @@ export default function Inventory() {
 
   if (error) {
     return (
-      <div className="p-6">
-        <p className="text-destructive">Error loading products. Please try again.</p>
+      <div className="p-6 space-y-4">
+        <div className="text-destructive space-y-2">
+          <p className="font-semibold">Error loading products:</p>
+          <p>{error instanceof Error ? error.message : "Unknown error"}</p>
+          <p className="text-sm">Check browser console for details</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ["products"] });
+          }}>
+            Retry
+          </Button>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Reload Page
+          </Button>
+        </div>
       </div>
     );
   }
@@ -72,13 +133,41 @@ export default function Inventory() {
         <div>
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Inventory</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your products and stock levels
+            Manage your products and stock levels {products.length > 0 && `(${products.length} products)`}
           </p>
         </div>
-        <Button onClick={() => setLocation("/inventory/new")} data-testid="button-add-product">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Product
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              console.log("Manual API test...");
+              try {
+                const response = await fetch("/api/products");
+                const data = await response.json();
+                console.log("Manual API response:", data);
+                console.log("Response status:", response.status);
+                queryClient.invalidateQueries({ queryKey: ["products"] });
+                toast({
+                  title: "Refreshed",
+                  description: `Found ${Array.isArray(data) ? data.length : 0} products`,
+                });
+              } catch (error) {
+                console.error("Manual API test error:", error);
+                toast({
+                  title: "Error",
+                  description: "Failed to fetch products",
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            Refresh
+          </Button>
+          <Button onClick={() => setLocation("/inventory/new")} data-testid="button-add-product">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -188,7 +277,9 @@ export default function Inventory() {
                           ${pricePerUnit.toFixed(2)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {product.location}
+                          {product.locationId && locationsMap[product.locationId]
+                            ? `${locationsMap[product.locationId].name} (${locationsMap[product.locationId].shortcode})`
+                            : product.locationId || "N/A"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">

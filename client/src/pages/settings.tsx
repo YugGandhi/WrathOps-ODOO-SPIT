@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -14,78 +14,244 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useForm } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 
-// Mock warehouse data
-const mockWarehouses = [
-  { id: "1", name: "Main Warehouse", shortCode: "MW", address: "123 Business Street, New York, NY 10001" },
-  { id: "2", name: "Secondary Warehouse", shortCode: "SW", address: "456 Industrial Ave, Brooklyn, NY 11201" },
-];
-
-// Mock location data
-const mockLocations = [
-  { id: "1", name: "Zone A", shortCode: "ZA", warehouse: "MW" },
-  { id: "2", name: "Zone B", shortCode: "ZB", warehouse: "MW" },
-  { id: "3", name: "Receiving", shortCode: "RCV", warehouse: "SW" },
-];
-
 export default function Settings() {
-  const [warehouses, setWarehouses] = useState(mockWarehouses);
-  const [locations, setLocations] = useState(mockLocations);
-  const [warehouseForm, setWarehouseForm] = useState({ name: "", shortCode: "", address: "" });
-  const [locationForm, setLocationForm] = useState({ name: "", shortCode: "", warehouse: "" });
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [warehouseForm, setWarehouseForm] = useState({ name: "", shortcode: "", address: "" });
+  const [locationForm, setLocationForm] = useState({ name: "", shortcode: "", warehouseId: "" });
 
-  const handleAddWarehouse = () => {
-    if (!warehouseForm.name || !warehouseForm.shortCode || !warehouseForm.address) {
+  // Fetch warehouses
+  const { data: warehouses = [], isLoading: warehousesLoading, error: warehousesError } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/warehouses");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+          console.error("Warehouses fetch error:", errorData);
+          throw new Error(errorData.error || `Failed to fetch warehouses: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Fetched warehouses:", data);
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Warehouses fetch exception:", error);
+        throw error;
+      }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch locations
+  const { data: locations = [], isLoading: locationsLoading, error: locationsError } = useQuery({
+    queryKey: ["locations"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/locations");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+          console.error("Locations fetch error:", errorData);
+          throw new Error(errorData.error || `Failed to fetch locations: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Fetched locations:", data);
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Locations fetch exception:", error);
+        throw error;
+      }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  // Create warehouse mutation
+  const createWarehouse = useMutation({
+    mutationFn: async (data: { name: string; shortcode: string; address?: string }) => {
+      const response = await fetch("/api/warehouses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create warehouse");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+      toast({
+        title: "Success",
+        description: "Warehouse added successfully",
+      });
+      setWarehouseForm({ name: "", shortcode: "", address: "" });
+    },
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Please fill all fields",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete warehouse mutation
+  const deleteWarehouse = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/warehouses/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete warehouse");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      toast({
+        title: "Success",
+        description: "Warehouse deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete warehouse",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create location mutation
+  const createLocation = useMutation({
+    mutationFn: async (data: { name: string; shortcode: string; warehouseId: string; description?: string }) => {
+      const response = await fetch("/api/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create location");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      toast({
+        title: "Success",
+        description: "Location added successfully",
+      });
+      setLocationForm({ name: "", shortcode: "", warehouseId: "" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete location mutation
+  const deleteLocation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/locations/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete location");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      toast({
+        title: "Success",
+        description: "Location deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete location",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAddWarehouse = () => {
+    if (!warehouseForm.name || !warehouseForm.shortcode) {
+      toast({
+        title: "Error",
+        description: "Please fill all required fields",
         variant: "destructive",
       });
       return;
     }
-    setWarehouses([...warehouses, { id: String(warehouses.length + 1), ...warehouseForm }]);
-    toast({
-      title: "Success",
-      description: "Warehouse added successfully",
-    });
-    setWarehouseForm({ name: "", shortCode: "", address: "" });
+    createWarehouse.mutate(warehouseForm);
   };
 
   const handleDeleteWarehouse = (id: string) => {
-    setWarehouses(warehouses.filter(w => w.id !== id));
-    toast({
-      title: "Success",
-      description: "Warehouse deleted successfully",
-    });
+    if (confirm("Are you sure you want to delete this warehouse? This will also delete all locations in this warehouse.")) {
+      deleteWarehouse.mutate(id);
+    }
   };
 
   const handleAddLocation = () => {
-    if (!locationForm.name || !locationForm.shortCode || !locationForm.warehouse) {
+    if (!locationForm.name || !locationForm.shortcode || !locationForm.warehouseId) {
       toast({
         title: "Error",
-        description: "Please fill all fields",
+        description: "Please fill all required fields",
         variant: "destructive",
       });
       return;
     }
-    setLocations([...locations, { id: String(locations.length + 1), ...locationForm }]);
-    toast({
-      title: "Success",
-      description: "Location added successfully",
-    });
-    setLocationForm({ name: "", shortCode: "", warehouse: "" });
+    createLocation.mutate(locationForm);
   };
 
   const handleDeleteLocation = (id: string) => {
-    setLocations(locations.filter(l => l.id !== id));
-    toast({
-      title: "Success",
-      description: "Location deleted successfully",
-    });
+    if (confirm("Are you sure you want to delete this location?")) {
+      deleteLocation.mutate(id);
+    }
   };
+
+  // Create maps for quick lookups
+  const warehousesMap = warehouses.reduce((acc: Record<string, any>, w: any) => {
+    acc[w.id] = w;
+    return acc;
+  }, {});
+
+  const locationsByWarehouse = locations.reduce((acc: Record<string, any[]>, loc: any) => {
+    if (!acc[loc.warehouseId]) acc[loc.warehouseId] = [];
+    acc[loc.warehouseId].push(loc);
+    return acc;
+  }, {});
+
+  if (warehousesLoading || locationsLoading) {
+    return (
+      <div className="p-6">
+        <p>Loading warehouses and locations...</p>
+      </div>
+    );
+  }
+
+  if (warehousesError || locationsError) {
+    return (
+      <div className="p-6">
+        <div className="text-destructive space-y-2">
+          <p className="font-semibold">Error loading data:</p>
+          {warehousesError && <p>Warehouses: {warehousesError instanceof Error ? warehousesError.message : "Unknown error"}</p>}
+          {locationsError && <p>Locations: {locationsError instanceof Error ? locationsError.message : "Unknown error"}</p>}
+          <Button onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+            queryClient.invalidateQueries({ queryKey: ["locations"] });
+          }} className="mt-4">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -95,6 +261,25 @@ export default function Settings() {
           This page contains the warehouse details & location.
         </p>
       </div>
+
+      {/* Debug info - remove in production */}
+      {(warehousesError || locationsError) && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="text-sm space-y-2">
+              <p className="font-semibold text-destructive">Debug Information:</p>
+              {warehousesError && (
+                <p>Warehouses Error: {warehousesError instanceof Error ? warehousesError.message : String(warehousesError)}</p>
+              )}
+              {locationsError && (
+                <p>Locations Error: {locationsError instanceof Error ? locationsError.message : String(locationsError)}</p>
+              )}
+              <p>Warehouses Count: {warehouses.length}</p>
+              <p>Locations Count: {locations.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -132,8 +317,8 @@ export default function Settings() {
                     <Input
                       id="wh-code"
                       placeholder="e.g., MW"
-                      value={warehouseForm.shortCode}
-                      onChange={(e) => setWarehouseForm({ ...warehouseForm, shortCode: e.target.value })}
+                      value={warehouseForm.shortcode}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, shortcode: e.target.value })}
                       data-testid="input-warehouse-code"
                     />
                   </div>
@@ -141,7 +326,7 @@ export default function Settings() {
                     <Label htmlFor="wh-address">Address:</Label>
                     <Input
                       id="wh-address"
-                      placeholder="Warehouse address"
+                      placeholder="Warehouse address (optional)"
                       value={warehouseForm.address}
                       onChange={(e) => setWarehouseForm({ ...warehouseForm, address: e.target.value })}
                       data-testid="input-warehouse-address"
@@ -152,31 +337,35 @@ export default function Settings() {
                 <Button
                   onClick={handleAddWarehouse}
                   className="w-full md:w-auto"
+                  disabled={createWarehouse.isPending}
                   data-testid="button-add-warehouse"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Warehouse
+                  {createWarehouse.isPending ? "Adding..." : "Add Warehouse"}
                 </Button>
               </div>
 
               {/* Warehouse Hierarchy */}
               <div className="space-y-3" data-testid="warehouse-hierarchy">
-                {warehouses.map((warehouse) => (
+                {warehouses.map((warehouse: any) => (
                   <Card key={warehouse.id} data-testid={`card-warehouse-${warehouse.id}`}>
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <CardTitle className="text-base">{warehouse.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">{warehouse.address}</p>
+                          {warehouse.address && (
+                            <p className="text-sm text-muted-foreground mt-1">{warehouse.address}</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                            {warehouse.shortCode}
+                            {warehouse.shortcode}
                           </span>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteWarehouse(warehouse.id)}
+                            disabled={deleteWarehouse.isPending}
                             data-testid={`button-delete-warehouse-${warehouse.id}`}
                           >
                             <Trash2 className="w-4 h-4 text-red-600" />
@@ -188,28 +377,27 @@ export default function Settings() {
                       <div className="space-y-2">
                         <p className="text-sm font-semibold text-muted-foreground">Locations:</p>
                         <div className="space-y-1 ml-4">
-                          {locations
-                            .filter(loc => loc.warehouse === warehouse.shortCode)
-                            .map((location) => (
-                              <div key={location.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-slate-900 rounded" data-testid={`location-in-warehouse-${location.id}`}>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-gray-500">→</span>
-                                  <span className="text-sm font-medium">{location.name}</span>
-                                  <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded">
-                                    {location.shortCode}
-                                  </span>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteLocation(location.id)}
-                                  data-testid={`button-delete-location-from-warehouse-${location.id}`}
-                                >
-                                  <Trash2 className="w-3 h-3 text-red-600" />
-                                </Button>
+                          {locationsByWarehouse[warehouse.id]?.map((location: any) => (
+                            <div key={location.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-slate-900 rounded" data-testid={`location-in-warehouse-${location.id}`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500">→</span>
+                                <span className="text-sm font-medium">{location.name}</span>
+                                <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded">
+                                  {location.shortcode}
+                                </span>
                               </div>
-                            ))}
-                          {locations.filter(loc => loc.warehouse === warehouse.shortCode).length === 0 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteLocation(location.id)}
+                                disabled={deleteLocation.isPending}
+                                data-testid={`button-delete-location-from-warehouse-${location.id}`}
+                              >
+                                <Trash2 className="w-3 h-3 text-red-600" />
+                              </Button>
+                            </div>
+                          ))}
+                          {(!locationsByWarehouse[warehouse.id] || locationsByWarehouse[warehouse.id].length === 0) && (
                             <p className="text-xs text-muted-foreground italic">No locations added yet</p>
                           )}
                         </div>
@@ -217,6 +405,9 @@ export default function Settings() {
                     </CardContent>
                   </Card>
                 ))}
+                {warehouses.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No warehouses added yet</p>
+                )}
               </div>
             </TabsContent>
 
@@ -245,35 +436,38 @@ export default function Settings() {
                     <Input
                       id="loc-code"
                       placeholder="e.g., ZA"
-                      value={locationForm.shortCode}
-                      onChange={(e) => setLocationForm({ ...locationForm, shortCode: e.target.value })}
+                      value={locationForm.shortcode}
+                      onChange={(e) => setLocationForm({ ...locationForm, shortcode: e.target.value })}
                       data-testid="input-location-code"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="loc-warehouse">Warehouse:</Label>
-                    <Select value={locationForm.warehouse} onValueChange={(value) => setLocationForm({ ...locationForm, warehouse: value })}>
-                      <SelectTrigger id="loc-warehouse" data-testid="select-location-warehouse">
-                        <SelectValue placeholder="Select warehouse" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.shortCode}>
-                            {warehouse.name} ({warehouse.shortCode})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <select
+                      id="loc-warehouse"
+                      value={locationForm.warehouseId}
+                      onChange={(e) => setLocationForm({ ...locationForm, warehouseId: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      data-testid="select-location-warehouse"
+                    >
+                      <option value="">Select warehouse</option>
+                      {warehouses.map((warehouse: any) => (
+                        <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name} ({warehouse.shortcode})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <Button
                   onClick={handleAddLocation}
                   className="w-full md:w-auto"
+                  disabled={createLocation.isPending}
                   data-testid="button-add-location"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Location
+                  {createLocation.isPending ? "Adding..." : "Add Location"}
                 </Button>
               </div>
 
@@ -289,23 +483,34 @@ export default function Settings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {locations.map((location) => (
-                      <TableRow key={location.id} data-testid={`row-location-${location.id}`}>
-                        <TableCell className="font-medium">{location.name}</TableCell>
-                        <TableCell>{location.shortCode}</TableCell>
-                        <TableCell>{location.warehouse}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteLocation(location.id)}
-                            data-testid={`button-delete-location-${location.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </Button>
+                    {locations.map((location: any) => {
+                      const warehouse = warehousesMap[location.warehouseId];
+                      return (
+                        <TableRow key={location.id} data-testid={`row-location-${location.id}`}>
+                          <TableCell className="font-medium">{location.name}</TableCell>
+                          <TableCell>{location.shortcode}</TableCell>
+                          <TableCell>{warehouse ? `${warehouse.name} (${warehouse.shortcode})` : "Unknown"}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteLocation(location.id)}
+                              disabled={deleteLocation.isPending}
+                              data-testid={`button-delete-location-${location.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {locations.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                          No locations added yet
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </div>
