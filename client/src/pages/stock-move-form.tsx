@@ -16,11 +16,14 @@ export default function StockMoveForm() {
 
   const form = useForm({
     defaultValues: {
+      reference: "",
       productId: "",
       quantity: 0,
       fromLocation: "",
       toLocation: "",
       date: new Date().toISOString().split('T')[0],
+      type: "Internal",
+      status: "Draft",
     },
   });
 
@@ -71,6 +74,16 @@ export default function StockMoveForm() {
           <CardContent>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="reference">Reference *</Label>
+                <Input
+                  id="reference"
+                  data-testid="input-reference"
+                  placeholder="e.g., WH/INT/0013"
+                  {...form.register("reference")}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="productId">Product</Label>
                 <Select {...form.register("productId")}>
                   <SelectTrigger id="productId" data-testid="select-product">
@@ -119,6 +132,37 @@ export default function StockMoveForm() {
                     <SelectItem value="wa-z1">Warehouse A - Zone 1</SelectItem>
                     <SelectItem value="wa-z2">Warehouse A - Zone 2</SelectItem>
                     <SelectItem value="wb-z1">Warehouse B - Zone 1</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select {...form.register("type")}>
+                  <SelectTrigger id="type" data-testid="select-type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Receipt">Receipt</SelectItem>
+                    <SelectItem value="Delivery">Delivery</SelectItem>
+                    <SelectItem value="Internal">Internal</SelectItem>
+                    <SelectItem value="Adjustment">Adjustment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select {...form.register("status")}>
+                  <SelectTrigger id="status" data-testid="select-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Draft">Draft</SelectItem>
+                    <SelectItem value="Waiting">Waiting</SelectItem>
+                    <SelectItem value="Ready">Ready</SelectItem>
+                    <SelectItem value="Done">Done</SelectItem>
+                    <SelectItem value="Canceled">Canceled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
