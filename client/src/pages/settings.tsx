@@ -3,191 +3,289 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
+import { Plus, Trash2 } from "lucide-react";
+
+// Mock warehouse data
+const mockWarehouses = [
+  { id: "1", name: "Main Warehouse", shortCode: "MW", address: "123 Business Street, New York, NY 10001" },
+  { id: "2", name: "Secondary Warehouse", shortCode: "SW", address: "456 Industrial Ave, Brooklyn, NY 11201" },
+];
+
+// Mock location data
+const mockLocations = [
+  { id: "1", name: "Zone A", shortCode: "ZA", warehouse: "MW" },
+  { id: "2", name: "Zone B", shortCode: "ZB", warehouse: "MW" },
+  { id: "3", name: "Receiving", shortCode: "RCV", warehouse: "SW" },
+];
 
 export default function Settings() {
-  const [isEditing, setIsEditing] = useState(false);
+  const [warehouses, setWarehouses] = useState(mockWarehouses);
+  const [locations, setLocations] = useState(mockLocations);
+  const [warehouseForm, setWarehouseForm] = useState({ name: "", shortCode: "", address: "" });
+  const [locationForm, setLocationForm] = useState({ name: "", shortCode: "", warehouse: "" });
   const { toast } = useToast();
-  
-  const form = useForm({
-    defaultValues: {
-      companyName: "StockMaster Industries",
-      email: "info@stockmaster.com",
-      phone: "+1 (555) 000-0000",
-      addressLine: "123 Business Street",
-      buildingNo: "Building 5",
-      street: "Main Avenue",
-      city: "New York",
-      state: "NY",
-      pincode: "10001",
-      country: "United States",
-    },
-  });
 
-  const onSubmit = async (data: any) => {
-    try {
-      console.log("Company settings:", data);
-      toast({
-        title: "Settings saved",
-        description: "Company profile has been updated successfully",
-      });
-      setIsEditing(false);
-    } catch (error) {
+  const handleAddWarehouse = () => {
+    if (!warehouseForm.name || !warehouseForm.shortCode || !warehouseForm.address) {
       toast({
         title: "Error",
-        description: "Failed to save settings",
+        description: "Please fill all fields",
         variant: "destructive",
       });
+      return;
     }
+    setWarehouses([...warehouses, { id: String(warehouses.length + 1), ...warehouseForm }]);
+    toast({
+      title: "Success",
+      description: "Warehouse added successfully",
+    });
+    setWarehouseForm({ name: "", shortCode: "", address: "" });
+  };
+
+  const handleDeleteWarehouse = (id: string) => {
+    setWarehouses(warehouses.filter(w => w.id !== id));
+    toast({
+      title: "Success",
+      description: "Warehouse deleted successfully",
+    });
+  };
+
+  const handleAddLocation = () => {
+    if (!locationForm.name || !locationForm.shortCode || !locationForm.warehouse) {
+      toast({
+        title: "Error",
+        description: "Please fill all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocations([...locations, { id: String(locations.length + 1), ...locationForm }]);
+    toast({
+      title: "Success",
+      description: "Location added successfully",
+    });
+    setLocationForm({ name: "", shortCode: "", warehouse: "" });
+  };
+
+  const handleDeleteLocation = (id: string) => {
+    setLocations(locations.filter(l => l.id !== id));
+    toast({
+      title: "Success",
+      description: "Location deleted successfully",
+    });
   };
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage company profile and system settings
-          </p>
-        </div>
-        {!isEditing && (
-          <Button
-            onClick={() => setIsEditing(true)}
-            data-testid="button-edit-settings"
-          >
-            Edit
-          </Button>
-        )}
+      <div>
+        <h1 className="text-2xl font-semibold" data-testid="text-page-title">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          This page contains the warehouse details & location.
+        </p>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Company Profile</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company Name</Label>
-                <Input
-                  id="companyName"
-                  data-testid="input-company-name"
-                  disabled={!isEditing}
-                  {...form.register("companyName")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  data-testid="input-company-email"
-                  disabled={!isEditing}
-                  {...form.register("email")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  data-testid="input-company-phone"
-                  disabled={!isEditing}
-                  {...form.register("phone")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Input
-                  id="country"
-                  data-testid="input-company-country"
-                  disabled={!isEditing}
-                  {...form.register("country")}
-                />
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Warehouse & Location Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="warehouse" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="warehouse" data-testid="tab-warehouse">
+                1. Warehouse
+              </TabsTrigger>
+              <TabsTrigger value="location" data-testid="tab-location">
+                2. Locations
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="pt-4">
-              <h3 className="font-semibold mb-4">Address</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="buildingNo">Building No</Label>
-                  <Input
-                    id="buildingNo"
-                    data-testid="input-building-no"
-                    disabled={!isEditing}
-                    {...form.register("buildingNo")}
-                  />
+            {/* Warehouse Tab */}
+            <TabsContent value="warehouse" className="space-y-4">
+              <div className="bg-gray-50 dark:bg-slate-900 p-4 rounded-lg border space-y-4" data-testid="warehouse-form">
+                <h3 className="font-semibold text-lg">Warehouse</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="wh-name">Name:</Label>
+                    <Input
+                      id="wh-name"
+                      placeholder="Warehouse name"
+                      value={warehouseForm.name}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, name: e.target.value })}
+                      data-testid="input-warehouse-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="wh-code">Short Code:</Label>
+                    <Input
+                      id="wh-code"
+                      placeholder="e.g., MW"
+                      value={warehouseForm.shortCode}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, shortCode: e.target.value })}
+                      data-testid="input-warehouse-code"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="wh-address">Address:</Label>
+                    <Input
+                      id="wh-address"
+                      placeholder="Warehouse address"
+                      value={warehouseForm.address}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, address: e.target.value })}
+                      data-testid="input-warehouse-address"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="street">Street</Label>
-                  <Input
-                    id="street"
-                    data-testid="input-street"
-                    disabled={!isEditing}
-                    {...form.register("street")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addressLine">Address Line</Label>
-                  <Input
-                    id="addressLine"
-                    data-testid="input-address-line"
-                    disabled={!isEditing}
-                    {...form.register("addressLine")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    data-testid="input-company-city"
-                    disabled={!isEditing}
-                    {...form.register("city")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    data-testid="input-company-state"
-                    disabled={!isEditing}
-                    {...form.register("state")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pincode">Pincode</Label>
-                  <Input
-                    id="pincode"
-                    data-testid="input-company-pincode"
-                    disabled={!isEditing}
-                    {...form.register("pincode")}
-                  />
-                </div>
-              </div>
-            </div>
 
-            {isEditing && (
-              <div className="flex items-center gap-3 pt-4">
-                <Button type="submit" data-testid="button-save-settings">
-                  Save Changes
-                </Button>
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditing(false);
-                    form.reset();
-                  }}
-                  data-testid="button-cancel-settings"
+                  onClick={handleAddWarehouse}
+                  className="w-full md:w-auto"
+                  data-testid="button-add-warehouse"
                 >
-                  Cancel
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Warehouse
                 </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </form>
+
+              {/* Warehouse List */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Short Code</TableHead>
+                      <TableHead>Address</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {warehouses.map((warehouse) => (
+                      <TableRow key={warehouse.id} data-testid={`row-warehouse-${warehouse.id}`}>
+                        <TableCell className="font-medium">{warehouse.name}</TableCell>
+                        <TableCell>{warehouse.shortCode}</TableCell>
+                        <TableCell className="text-sm">{warehouse.address}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteWarehouse(warehouse.id)}
+                            data-testid={`button-delete-warehouse-${warehouse.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* Location Tab */}
+            <TabsContent value="location" className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This holds the multiple locations of warehouse, rooms etc..
+              </p>
+
+              <div className="bg-gray-50 dark:bg-slate-900 p-4 rounded-lg border space-y-4" data-testid="location-form">
+                <h3 className="font-semibold text-lg">Location</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="loc-name">Name:</Label>
+                    <Input
+                      id="loc-name"
+                      placeholder="Location name"
+                      value={locationForm.name}
+                      onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })}
+                      data-testid="input-location-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loc-code">Short Code:</Label>
+                    <Input
+                      id="loc-code"
+                      placeholder="e.g., ZA"
+                      value={locationForm.shortCode}
+                      onChange={(e) => setLocationForm({ ...locationForm, shortCode: e.target.value })}
+                      data-testid="input-location-code"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loc-warehouse">Warehouse:</Label>
+                    <Select value={locationForm.warehouse} onValueChange={(value) => setLocationForm({ ...locationForm, warehouse: value })}>
+                      <SelectTrigger id="loc-warehouse" data-testid="select-location-warehouse">
+                        <SelectValue placeholder="Select warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.shortCode}>
+                            {warehouse.name} ({warehouse.shortCode})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleAddLocation}
+                  className="w-full md:w-auto"
+                  data-testid="button-add-location"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Location
+                </Button>
+              </div>
+
+              {/* Location List */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Short Code</TableHead>
+                      <TableHead>Warehouse</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {locations.map((location) => (
+                      <TableRow key={location.id} data-testid={`row-location-${location.id}`}>
+                        <TableCell className="font-medium">{location.name}</TableCell>
+                        <TableCell>{location.shortCode}</TableCell>
+                        <TableCell>{location.warehouse}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteLocation(location.id)}
+                            data-testid={`button-delete-location-${location.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
