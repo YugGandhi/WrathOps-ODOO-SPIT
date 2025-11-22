@@ -1,4 +1,4 @@
-Video Link: https://www.loom.com/share/ad64711185594f55843443799ae1bc05
+Video Link: https://www.loom.com/share/a43503e0351b44149f00b37e7b863329
 
 
 # StockMaster - Inventory Management System
