@@ -159,24 +159,20 @@ export default function Settings() {
                 </Button>
               </div>
 
-              {/* Warehouse List */}
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Short Code</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {warehouses.map((warehouse) => (
-                      <TableRow key={warehouse.id} data-testid={`row-warehouse-${warehouse.id}`}>
-                        <TableCell className="font-medium">{warehouse.name}</TableCell>
-                        <TableCell>{warehouse.shortCode}</TableCell>
-                        <TableCell className="text-sm">{warehouse.address}</TableCell>
-                        <TableCell>
+              {/* Warehouse Hierarchy */}
+              <div className="space-y-3" data-testid="warehouse-hierarchy">
+                {warehouses.map((warehouse) => (
+                  <Card key={warehouse.id} data-testid={`card-warehouse-${warehouse.id}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-base">{warehouse.name}</CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1">{warehouse.address}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
+                            {warehouse.shortCode}
+                          </span>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -185,11 +181,42 @@ export default function Settings() {
                           >
                             <Trash2 className="w-4 h-4 text-red-600" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-muted-foreground">Locations:</p>
+                        <div className="space-y-1 ml-4">
+                          {locations
+                            .filter(loc => loc.warehouse === warehouse.shortCode)
+                            .map((location) => (
+                              <div key={location.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-slate-900 rounded" data-testid={`location-in-warehouse-${location.id}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-500">→</span>
+                                  <span className="text-sm font-medium">{location.name}</span>
+                                  <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded">
+                                    {location.shortCode}
+                                  </span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteLocation(location.id)}
+                                  data-testid={`button-delete-location-from-warehouse-${location.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3 text-red-600" />
+                                </Button>
+                              </div>
+                            ))}
+                          {locations.filter(loc => loc.warehouse === warehouse.shortCode).length === 0 && (
+                            <p className="text-xs text-muted-foreground italic">No locations added yet</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </TabsContent>
 
