@@ -69,7 +69,7 @@ export default function StockMoves() {
             Track and manage stock movements between locations
           </p>
         </div>
-        <Button data-testid="button-create-move">
+        <Button onClick={() => setLocation("/stock-moves/new")} data-testid="button-create-move">
           <Plus className="w-4 h-4 mr-2" />
           Create Transfer
         </Button>

@@ -20,8 +20,11 @@ import ProductForm from "@/pages/product-form";
 import Manufacturing from "@/pages/manufacturing";
 import ManufacturingDetails from "@/pages/manufacturing-details";
 import StockMoves from "@/pages/stock-moves";
+import StockMoveForm from "@/pages/stock-move-form";
 import Purchase from "@/pages/purchase";
+import PurchaseOrderForm from "@/pages/purchase-form";
 import Sales from "@/pages/sales";
+import SalesOrderForm from "@/pages/sales-form";
 import Contacts from "@/pages/contacts";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -57,12 +60,15 @@ function AppRouter() {
       
       {/* Stock moves */}
       <Route path="/stock-moves" component={StockMoves} />
+      <Route path="/stock-moves/new" component={StockMoveForm} />
       
       {/* Purchase */}
       <Route path="/purchase" component={Purchase} />
+      <Route path="/purchase/new" component={PurchaseOrderForm} />
       
       {/* Sales */}
       <Route path="/sales" component={Sales} />
+      <Route path="/sales/new" component={SalesOrderForm} />
       
       {/* Contacts */}
       <Route path="/contacts" component={Contacts} />
