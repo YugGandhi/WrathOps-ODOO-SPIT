@@ -105,7 +105,7 @@ export default function ManufacturingDetails() {
             </p>
           </div>
         </div>
-        <Button data-testid="button-validate-mo">
+        <Button onClick={() => console.log("Validate order")} data-testid="button-validate-mo">
           <CheckCircle2 className="w-4 h-4 mr-2" />
           Validate Order
         </Button>
@@ -222,18 +222,18 @@ export default function ManufacturingDetails() {
                       </div>
                       <div className="flex items-center gap-2">
                         {operation.status === "Pending" && (
-                          <Button size="sm" data-testid={`button-start-${operation.id}`}>
+                          <Button size="sm" onClick={() => console.log(`Start operation ${operation.id}`)} data-testid={`button-start-${operation.id}`}>
                             <Play className="w-4 h-4 mr-2" />
                             Start
                           </Button>
                         )}
                         {operation.status === "In Progress" && (
                           <>
-                            <Button size="sm" variant="outline" data-testid={`button-pause-${operation.id}`}>
+                            <Button size="sm" variant="outline" onClick={() => console.log(`Pause operation ${operation.id}`)} data-testid={`button-pause-${operation.id}`}>
                               <Pause className="w-4 h-4 mr-2" />
                               Pause
                             </Button>
-                            <Button size="sm" data-testid={`button-done-${operation.id}`}>
+                            <Button size="sm" onClick={() => console.log(`Done operation ${operation.id}`)} data-testid={`button-done-${operation.id}`}>
                               <CheckCircle2 className="w-4 h-4 mr-2" />
                               Done
                             </Button>

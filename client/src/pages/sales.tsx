@@ -129,7 +129,6 @@ export default function Sales() {
                   <TableRow
                     key={order.id}
                     className="cursor-pointer hover-elevate"
-                    onClick={() => setLocation(`/sales/${order.id}`)}
                     data-testid={`row-so-${order.id}`}
                   >
                     <TableCell className="font-medium">{order.reference}</TableCell>

@@ -129,7 +129,6 @@ export default function Purchase() {
                   <TableRow
                     key={order.id}
                     className="cursor-pointer hover-elevate"
-                    onClick={() => setLocation(`/purchase/${order.id}`)}
                     data-testid={`row-po-${order.id}`}
                   >
                     <TableCell className="font-medium">{order.reference}</TableCell>
