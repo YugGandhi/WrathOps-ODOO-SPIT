@@ -32,8 +32,21 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  
+  // Catch-all route for HTML pages - Vite middleware handles source files and assets
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+
+    // Skip API routes - they're handled by routes.ts
+    if (url.startsWith("/api")) {
+      return next();
+    }
+
+    // Skip requests that look like files (have extensions) - Vite handles these
+    // This includes .tsx, .ts, .jsx, .js, .css, images, etc.
+    if (url.match(/\.[a-zA-Z0-9]+$/)) {
+      return next();
+    }
 
     try {
       const clientTemplate = path.resolve(

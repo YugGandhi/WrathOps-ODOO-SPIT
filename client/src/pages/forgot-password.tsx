@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,10 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Package, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 const emailSchema = z.object({
   email: z.string().email("Invalid email format"),
+});
+
+const otpSchema = z.object({
+  otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d+$/, "OTP must contain only numbers"),
 });
 
 const resetPasswordSchema = z.object({
@@ -28,6 +33,7 @@ const resetPasswordSchema = z.object({
 });
 
 type EmailFormData = z.infer<typeof emailSchema>;
+type OTPFormData = z.infer<typeof otpSchema>;
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export default function ForgotPassword() {
@@ -35,10 +41,25 @@ export default function ForgotPassword() {
   const { toast } = useToast();
   const [step, setStep] = useState<"email" | "otp" | "reset">("email");
   const [isLoading, setIsLoading] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [resetToken, setResetToken] = useState<string>("");
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      setLocation("/dashboard");
+    }
+  }, [setLocation]);
   
   const emailForm = useForm<EmailFormData>({
     resolver: zodResolver(emailSchema),
     defaultValues: { email: "" },
+  });
+
+  const otpForm = useForm<OTPFormData>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: { otp: "" },
   });
 
   const resetForm = useForm<ResetPasswordFormData>({
@@ -52,17 +73,40 @@ export default function ForgotPassword() {
   const onEmailSubmit = async (data: EmailFormData) => {
     setIsLoading(true);
     try {
-      console.log("Email submitted:", data);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setStep("otp");
-      toast({
-        title: "Email sent",
-        description: "Please check your email for reset instructions",
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to send reset email");
+      }
+
+      const result = await response.json();
+      
+      // Store email for OTP verification
+      setUserEmail(data.email);
+      
+      // In development, we get the OTP back for testing
+      if (result.otp) {
+        toast({
+          title: "OTP Generated",
+          description: `Your OTP is: ${result.otp} (Development mode only)`,
+        });
+      } else {
+        toast({
+          title: "Email sent",
+          description: "Please check your email for the OTP code",
+        });
+      }
+      
+      setStep("otp");
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to send reset email",
+        description: error instanceof Error ? error.message : "Failed to send reset email",
         variant: "destructive",
       });
     } finally {
@@ -70,24 +114,77 @@ export default function ForgotPassword() {
     }
   };
 
-  const onOtpNext = () => {
-    setStep("reset");
+  const onOtpSubmit = async (data: OTPFormData) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userEmail,
+          otp: data.otp,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Invalid OTP");
+      }
+
+      const result = await response.json();
+      setResetToken(result.token);
+      
+      toast({
+        title: "OTP Verified",
+        description: "Please enter your new password",
+      });
+      
+      setStep("reset");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Invalid OTP. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onResetSubmit = async (data: ResetPasswordFormData) => {
     setIsLoading(true);
     try {
-      console.log("Password reset:", data);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // In development, use the token from the response
+      // In production, this would come from the email link
+      const token = resetToken || new URLSearchParams(window.location.search).get("token");
+      
+      if (!token) {
+        throw new Error("Reset token is missing");
+      }
+
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          newPassword: data.newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to reset password");
+      }
+
       toast({
         title: "Password updated",
-        description: "Your password has been successfully reset",
+        description: "Your password has been successfully reset. Please login with your new password.",
       });
       setLocation("/login");
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to reset password",
+        description: error instanceof Error ? error.message : "Failed to reset password",
         variant: "destructive",
       });
     } finally {
@@ -110,11 +207,9 @@ export default function ForgotPassword() {
             </Button>
             <div className="flex-1 text-center">
               <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 rounded-md bg-primary flex items-center justify-center">
-                  <Package className="w-6 h-6 text-primary-foreground" />
-                </div>
+                <Logo className="h-16 w-16" />
               </div>
-              <CardTitle className="text-2xl font-semibold">Reset Password</CardTitle>
+              <CardTitle className="text-2xl font-semibold text-blue-600">Reset Password</CardTitle>
               <CardDescription className="text-sm mt-2">
                 {step === "email" && "Enter your email to receive reset instructions"}
                 {step === "otp" && "Check your email for the verification code"}
@@ -153,20 +248,96 @@ export default function ForgotPassword() {
           )}
 
           {step === "otp" && (
-            <div className="space-y-4">
+            <form onSubmit={otpForm.handleSubmit(onOtpSubmit)} className="space-y-4">
               <div className="p-4 bg-muted rounded-md text-center">
-                <p className="text-sm text-muted-foreground">
-                  We've sent a reset link to your email. Click the link to continue.
+                <p className="text-sm text-muted-foreground mb-2">
+                  We've sent a 6-digit OTP code to your email.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Please enter the code below to continue.
                 </p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="otp">OTP Code</Label>
+                <Input
+                  id="otp"
+                  data-testid="input-otp"
+                  type="text"
+                  maxLength={6}
+                  placeholder="000000"
+                  className={`text-center text-2xl tracking-widest ${otpForm.formState.errors.otp ? "border-destructive" : ""}`}
+                  {...otpForm.register("otp", {
+                    onChange: (e) => {
+                      // Only allow numbers
+                      e.target.value = e.target.value.replace(/\D/g, '');
+                    }
+                  })}
+                />
+                {otpForm.formState.errors.otp && (
+                  <p className="text-xs text-destructive">
+                    {otpForm.formState.errors.otp.message}
+                  </p>
+                )}
+              </div>
               <Button
-                onClick={onOtpNext}
+                type="submit"
                 className="w-full"
-                data-testid="button-otp-next"
+                disabled={isLoading}
+                data-testid="button-verify-otp"
               >
-                I've clicked the link
+                {isLoading ? "Verifying..." : "Verify OTP"}
               </Button>
-            </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-sm"
+                onClick={async () => {
+                  if (!userEmail) {
+                    setStep("email");
+                    return;
+                  }
+                  setIsLoading(true);
+                  try {
+                    const response = await fetch("/api/auth/forgot-password", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: userEmail }),
+                    });
+
+                    if (!response.ok) {
+                      throw new Error("Failed to resend OTP");
+                    }
+
+                    const result = await response.json();
+                    otpForm.reset();
+                    
+                    if (result.otp) {
+                      toast({
+                        title: "OTP Resent",
+                        description: `Your new OTP is: ${result.otp} (Development mode only)`,
+                      });
+                    } else {
+                      toast({
+                        title: "OTP Resent",
+                        description: "Please check your email for the new OTP code",
+                      });
+                    }
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to resend OTP. Please try again.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={isLoading}
+                data-testid="button-resend-otp"
+              >
+                Resend OTP
+              </Button>
+            </form>
           )}
 
           {step === "reset" && (

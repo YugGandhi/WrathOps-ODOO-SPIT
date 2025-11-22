@@ -1,4 +1,5 @@
 import { useRoute, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,56 +14,81 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Edit, Settings } from "lucide-react";
 
-// Mock data
-const product = {
-  id: "1",
-  name: "Oak Wood Plank",
-  sku: "OWP-001",
-  category: "Raw Materials",
-  unitOfMeasure: "pieces",
-  description: "High-quality oak wood planks for furniture manufacturing",
-  onHand: 450,
-  reserved: 120,
-  forecasted: 600,
-  minimumQuantity: 100,
-  preferredSupplier: "Timber Supplies Inc.",
-};
-
-const locations = [
-  { warehouse: "Warehouse A", zone: "Zone 1", quantity: 300 },
-  { warehouse: "Warehouse A", zone: "Zone 3", quantity: 150 },
-];
-
-const stockHistory = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    reference: "WH/IN/0023",
-    type: "Receipt",
-    quantity: "+200",
-    balance: 450,
-  },
-  {
-    id: "2",
-    date: "2024-01-10",
-    reference: "WH/OUT/0041",
-    type: "Delivery",
-    quantity: "-50",
-    balance: 250,
-  },
-  {
-    id: "3",
-    date: "2024-01-05",
-    reference: "WH/ADJ/0007",
-    type: "Adjustment",
-    quantity: "+10",
-    balance: 300,
-  },
-];
-
 export default function ProductDetails() {
-  const [match] = useRoute("/inventory/:id");
+  const [match, params] = useRoute("/inventory/:id");
   const [, setLocation] = useLocation();
+  const productId = params?.id;
+
+  // Fetch product
+  const { data: product, isLoading: productLoading } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: async () => {
+      if (!productId) return null;
+      const response = await fetch(`/api/products/${productId}`);
+      if (!response.ok) throw new Error("Failed to fetch product");
+      return response.json();
+    },
+    enabled: !!productId,
+  });
+
+  // Fetch stock moves for this product
+  const { data: stockMoves = [] } = useQuery({
+    queryKey: ["stock-moves", productId],
+    queryFn: async () => {
+      const response = await fetch("/api/stock-moves");
+      if (!response.ok) return [];
+      const allMoves = await response.json();
+      return allMoves.filter((move: any) => move.productId === productId);
+    },
+    enabled: !!productId,
+  });
+
+  if (productLoading) {
+    return (
+      <div className="p-6">
+        <p>Loading product...</p>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/inventory")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold">Product Not Found</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              The product you're looking for doesn't exist
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate stock history from stock moves
+  let runningBalance = product.onHandQuantity || 0;
+  const stockHistory = stockMoves
+    .map((move: any) => {
+      const quantity = move.quantity || 0;
+      runningBalance -= quantity; // Reverse chronological order
+      return {
+        id: move.id,
+        date: move.date ? new Date(move.date).toISOString().split('T')[0] : "",
+        reference: move.reference,
+        type: move.type,
+        quantity: quantity > 0 ? `+${quantity}` : `${quantity}`,
+        balance: runningBalance + quantity,
+      };
+    })
+    .reverse(); // Show in chronological order
 
   return (
     <div className="p-6 space-y-6">
@@ -137,23 +163,25 @@ export default function ProductDetails() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <p className="text-sm text-muted-foreground">On Hand</p>
-                  <p className="text-sm font-semibold" data-testid="text-on-hand">{product.onHand}</p>
+                  <p className="text-sm font-semibold" data-testid="text-on-hand">{product.onHandQuantity || 0}</p>
                 </div>
                 <div className="flex justify-between">
                   <p className="text-sm text-muted-foreground">Reserved</p>
-                  <p className="text-sm" data-testid="text-reserved">{product.reserved}</p>
+                  <p className="text-sm" data-testid="text-reserved">{product.reservedQuantity || 0}</p>
                 </div>
                 <div className="flex justify-between">
-                  <p className="text-sm text-muted-foreground">Forecasted</p>
-                  <p className="text-sm" data-testid="text-forecasted">{product.forecasted}</p>
+                  <p className="text-sm text-muted-foreground">Free to Use</p>
+                  <p className="text-sm" data-testid="text-free-to-use">
+                    {(product.onHandQuantity || 0) - (product.reservedQuantity || 0)}
+                  </p>
                 </div>
                 <div className="flex justify-between">
                   <p className="text-sm text-muted-foreground">Minimum Quantity</p>
-                  <p className="text-sm">{product.minimumQuantity}</p>
+                  <p className="text-sm">{product.minimumQuantity || 0}</p>
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">Status</p>
-                  {product.onHand <= product.minimumQuantity ? (
+                  {(product.onHandQuantity || 0) <= (product.minimumQuantity || 0) ? (
                     <Badge variant="destructive">Low Stock</Badge>
                   ) : (
                     <Badge className="bg-green-100 text-green-800">In Stock</Badge>
@@ -170,7 +198,11 @@ export default function ProductDetails() {
             <CardContent className="space-y-3">
               <div>
                 <p className="text-sm text-muted-foreground">Preferred Supplier</p>
-                <p className="text-sm font-medium">{product.preferredSupplier}</p>
+                <p className="text-sm font-medium">{product.preferredSupplier || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Location</p>
+                <p className="text-sm font-medium">{product.location || "N/A"}</p>
               </div>
             </CardContent>
           </Card>
@@ -192,13 +224,19 @@ export default function ProductDetails() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {locations.map((loc, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{loc.warehouse}</TableCell>
-                        <TableCell>{loc.zone}</TableCell>
-                        <TableCell className="text-right font-medium">{loc.quantity}</TableCell>
+                    {product.location ? (
+                      <TableRow>
+                        <TableCell className="font-medium">{product.location}</TableCell>
+                        <TableCell>-</TableCell>
+                        <TableCell className="text-right font-medium">{product.onHandQuantity || 0}</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                          No location information available
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -224,17 +262,25 @@ export default function ProductDetails() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {stockHistory.map((move) => (
-                      <TableRow key={move.id}>
-                        <TableCell className="text-sm">{move.date}</TableCell>
-                        <TableCell className="font-medium">{move.reference}</TableCell>
-                        <TableCell className="text-sm">{move.type}</TableCell>
-                        <TableCell className={`text-right font-medium ${move.quantity.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                          {move.quantity}
+                    {stockHistory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No stock history available
                         </TableCell>
-                        <TableCell className="text-right font-medium">{move.balance}</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      stockHistory.map((move: any) => (
+                        <TableRow key={move.id}>
+                          <TableCell className="text-sm">{move.date}</TableCell>
+                          <TableCell className="font-medium">{move.reference}</TableCell>
+                          <TableCell className="text-sm">{move.type}</TableCell>
+                          <TableCell className={`text-right font-medium ${move.quantity.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                            {move.quantity}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{move.balance}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>

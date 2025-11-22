@@ -23,6 +23,18 @@ import {
   type InsertContact,
   type CompanySettings,
   type InsertCompanySettings,
+  type Warehouse,
+  type InsertWarehouse,
+  type Location,
+  type InsertLocation,
+  type Receipt,
+  type InsertReceipt,
+  type ReceiptLineItem,
+  type InsertReceiptLineItem,
+  type DeliveryOrder,
+  type InsertDeliveryOrder,
+  type DeliveryLineItem,
+  type InsertDeliveryLineItem,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
@@ -34,6 +46,14 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   verifyPassword(password: string, hash: string): Promise<boolean>;
+  updateUserPassword(userId: string, newPassword: string): Promise<User | undefined>;
+  setResetToken(userId: string, token: string, expiresAt: Date): Promise<void>;
+  getUserByResetToken(token: string): Promise<User | undefined>;
+  clearResetToken(userId: string): Promise<void>;
+  // OTP methods
+  generateAndStoreOTP(userId: string): Promise<{ otp: string; token: string }>;
+  verifyOTP(email: string, otp: string): Promise<{ valid: boolean; token?: string }>;
+  getUserByResetTokenFromOTP(token: string): Promise<User | undefined>;
 
   // Products
   getAllProducts(): Promise<Product[]>;
@@ -93,6 +113,47 @@ export interface IStorage {
   // Company Settings
   getCompanySettings(): Promise<CompanySettings | undefined>;
   updateCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
+
+  // Warehouses
+  getAllWarehouses(): Promise<Warehouse[]>;
+  getWarehouse(id: string): Promise<Warehouse | undefined>;
+  createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse>;
+  updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined>;
+  deleteWarehouse(id: string): Promise<boolean>;
+
+  // Locations
+  getAllLocations(): Promise<Location[]>;
+  getLocation(id: string): Promise<Location | undefined>;
+  getLocationsByWarehouse(warehouseId: string): Promise<Location[]>;
+  createLocation(location: InsertLocation): Promise<Location>;
+  updateLocation(id: string, location: Partial<InsertLocation>): Promise<Location | undefined>;
+  deleteLocation(id: string): Promise<boolean>;
+
+  // Receipts
+  getAllReceipts(): Promise<Receipt[]>;
+  getReceipt(id: string): Promise<Receipt | undefined>;
+  createReceipt(receipt: InsertReceipt): Promise<Receipt>;
+  updateReceipt(id: string, receipt: Partial<InsertReceipt>): Promise<Receipt | undefined>;
+  deleteReceipt(id: string): Promise<boolean>;
+
+  // Receipt Line Items
+  getReceiptLineItems(receiptId: string): Promise<ReceiptLineItem[]>;
+  createReceiptLineItem(item: InsertReceiptLineItem): Promise<ReceiptLineItem>;
+  updateReceiptLineItem(id: string, item: Partial<InsertReceiptLineItem>): Promise<ReceiptLineItem | undefined>;
+  deleteReceiptLineItem(id: string): Promise<boolean>;
+
+  // Delivery Orders
+  getAllDeliveryOrders(): Promise<DeliveryOrder[]>;
+  getDeliveryOrder(id: string): Promise<DeliveryOrder | undefined>;
+  createDeliveryOrder(order: InsertDeliveryOrder): Promise<DeliveryOrder>;
+  updateDeliveryOrder(id: string, order: Partial<InsertDeliveryOrder>): Promise<DeliveryOrder | undefined>;
+  deleteDeliveryOrder(id: string): Promise<boolean>;
+
+  // Delivery Line Items
+  getDeliveryLineItems(deliveryId: string): Promise<DeliveryLineItem[]>;
+  createDeliveryLineItem(item: InsertDeliveryLineItem): Promise<DeliveryLineItem>;
+  updateDeliveryLineItem(id: string, item: Partial<InsertDeliveryLineItem>): Promise<DeliveryLineItem | undefined>;
+  deleteDeliveryLineItem(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -179,6 +240,42 @@ export class MemStorage implements IStorage {
 
   async verifyPassword(password: string, hash: string): Promise<boolean> {
     return bcrypt.compare(password, hash);
+  }
+
+  async updateUserPassword(userId: string, newPassword: string): Promise<User | undefined> {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    user.password = hashedPassword;
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async setResetToken(userId: string, token: string, expiresAt: Date): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.resetToken = token;
+      user.resetTokenExpiry = expiresAt;
+      this.users.set(userId, user);
+    }
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const now = new Date();
+    return Array.from(this.users.values()).find(
+      (user) => user.resetToken === token && user.resetTokenExpiry && user.resetTokenExpiry > now
+    );
+  }
+
+  async clearResetToken(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.resetToken = null;
+      user.resetTokenExpiry = null;
+      this.users.set(userId, user);
+    }
   }
 
   // Products
@@ -425,6 +522,146 @@ export class MemStorage implements IStorage {
     }
     return this.companySettings;
   }
+
+  // Warehouses - Stub implementations
+  async getAllWarehouses(): Promise<Warehouse[]> {
+    return [];
+  }
+
+  async getWarehouse(id: string): Promise<Warehouse | undefined> {
+    return undefined;
+  }
+
+  async createWarehouse(warehouse: InsertWarehouse): Promise<Warehouse> {
+    const id = randomUUID();
+    return { ...warehouse, id };
+  }
+
+  async updateWarehouse(id: string, warehouse: Partial<InsertWarehouse>): Promise<Warehouse | undefined> {
+    return undefined;
+  }
+
+  async deleteWarehouse(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Locations - Stub implementations
+  async getAllLocations(): Promise<Location[]> {
+    return [];
+  }
+
+  async getLocation(id: string): Promise<Location | undefined> {
+    return undefined;
+  }
+
+  async getLocationsByWarehouse(warehouseId: string): Promise<Location[]> {
+    return [];
+  }
+
+  async createLocation(location: InsertLocation): Promise<Location> {
+    const id = randomUUID();
+    return { ...location, id };
+  }
+
+  async updateLocation(id: string, location: Partial<InsertLocation>): Promise<Location | undefined> {
+    return undefined;
+  }
+
+  async deleteLocation(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Receipts - Stub implementations
+  async getAllReceipts(): Promise<Receipt[]> {
+    return [];
+  }
+
+  async getReceipt(id: string): Promise<Receipt | undefined> {
+    return undefined;
+  }
+
+  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
+    const id = randomUUID();
+    return { ...receipt, id, createdAt: new Date(), updatedAt: new Date() };
+  }
+
+  async updateReceipt(id: string, receipt: Partial<InsertReceipt>): Promise<Receipt | undefined> {
+    return undefined;
+  }
+
+  async deleteReceipt(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Receipt Line Items - Stub implementations
+  async getReceiptLineItems(receiptId: string): Promise<ReceiptLineItem[]> {
+    return [];
+  }
+
+  async createReceiptLineItem(item: InsertReceiptLineItem): Promise<ReceiptLineItem> {
+    const id = randomUUID();
+    return { ...item, id };
+  }
+
+  async updateReceiptLineItem(id: string, item: Partial<InsertReceiptLineItem>): Promise<ReceiptLineItem | undefined> {
+    return undefined;
+  }
+
+  async deleteReceiptLineItem(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Delivery Orders - Stub implementations
+  async getAllDeliveryOrders(): Promise<DeliveryOrder[]> {
+    return [];
+  }
+
+  async getDeliveryOrder(id: string): Promise<DeliveryOrder | undefined> {
+    return undefined;
+  }
+
+  async createDeliveryOrder(order: InsertDeliveryOrder): Promise<DeliveryOrder> {
+    const id = randomUUID();
+    return { ...order, id, createdAt: new Date(), updatedAt: new Date() };
+  }
+
+  async updateDeliveryOrder(id: string, order: Partial<InsertDeliveryOrder>): Promise<DeliveryOrder | undefined> {
+    return undefined;
+  }
+
+  async deleteDeliveryOrder(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Delivery Line Items - Stub implementations
+  async getDeliveryLineItems(deliveryId: string): Promise<DeliveryLineItem[]> {
+    return [];
+  }
+
+  async createDeliveryLineItem(item: InsertDeliveryLineItem): Promise<DeliveryLineItem> {
+    const id = randomUUID();
+    return { ...item, id };
+  }
+
+  async updateDeliveryLineItem(id: string, item: Partial<InsertDeliveryLineItem>): Promise<DeliveryLineItem | undefined> {
+    return undefined;
+  }
+
+  async deleteDeliveryLineItem(id: string): Promise<boolean> {
+    return false;
+  }
 }
 
-export const storage = new MemStorage();
+// Use database storage if DATABASE_URL is set, otherwise use in-memory storage
+let storageInstance: IStorage;
+
+if (process.env.DATABASE_URL) {
+  // Use database storage
+  const { DbStorage } = require("./db-storage");
+  storageInstance = new DbStorage();
+} else {
+  // Use in-memory storage
+  storageInstance = new MemStorage();
+}
+
+export const storage = storageInstance;

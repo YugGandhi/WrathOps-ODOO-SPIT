@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Package } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 const loginSchema = z.object({
   loginId: z.string().min(1, "Login ID is required"),
@@ -21,6 +21,14 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      setLocation("/dashboard");
+    }
+  }, [setLocation]);
   
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -71,12 +79,10 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <div className="w-12 h-12 rounded-md bg-primary flex items-center justify-center">
-              <Package className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <Logo className="h-16 w-16" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-semibold">StockMaster</CardTitle>
+            <CardTitle className="text-2xl font-semibold text-blue-600">StockMaster</CardTitle>
             <CardDescription className="text-sm mt-2">
               Sign in to your account to continue
             </CardDescription>

@@ -13,7 +13,9 @@ import {
   Settings,
   User2,
   LogOut,
+  ChevronDown,
 } from "lucide-react";
+import { Logo } from "./logo";
 
 const navigationItems = [
   {
@@ -51,7 +53,10 @@ export function TopNav() {
       <nav className="border-b bg-white dark:bg-slate-950" data-testid="top-nav">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
-            <h1 className="text-xl font-bold text-red-600">StockMaster</h1>
+            <div className="flex items-center gap-2">
+              <Logo className="h-8 w-8" />
+              <h1 className="text-xl font-bold text-blue-600">StockMaster</h1>
+            </div>
             <div className="flex items-center gap-6">
               {navigationItems.map((item) => (
                 <div key={item.title}>
@@ -60,14 +65,15 @@ export function TopNav() {
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
-                          className={`text-base font-medium ${
+                          className={`text-base font-medium flex items-center gap-1 ${
                             location.startsWith(item.url)
-                              ? "text-red-600"
+                              ? "text-blue-600"
                               : "text-gray-700 dark:text-gray-300"
                           }`}
                           data-testid={`nav-${item.title.toLowerCase()}`}
                         >
                           {item.title}
+                          <ChevronDown className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
@@ -87,7 +93,7 @@ export function TopNav() {
                       variant="ghost"
                       className={`text-base font-medium ${
                         location === item.url
-                          ? "text-red-600"
+                          ? "text-blue-600"
                           : "text-gray-700 dark:text-gray-300"
                       }`}
                       onClick={() => setLocation(item.url)}
@@ -104,7 +110,7 @@ export function TopNav() {
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
-              className="border-red-600 text-red-600 hover:bg-red-50"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50"
               onClick={() => setLocation("/dashboard")}
               data-testid="nav-dashboard-btn"
             >
@@ -120,7 +126,17 @@ export function TopNav() {
                 <DropdownMenuItem disabled>
                   <span className="text-sm">Admin User</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLocation("/logout")}>
+                <DropdownMenuItem onClick={async () => {
+                  try {
+                    await fetch("/api/auth/logout", { method: "POST" });
+                    localStorage.removeItem("user");
+                    setLocation("/login");
+                  } catch (error) {
+                    console.error("Logout error:", error);
+                    localStorage.removeItem("user");
+                    setLocation("/login");
+                  }
+                }}>
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
                 </DropdownMenuItem>

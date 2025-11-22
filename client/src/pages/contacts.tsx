@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,42 +26,6 @@ import { Search, Plus, Edit, Mail, Phone } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock data
-const contacts = [
-  {
-    id: "1",
-    name: "Timber Supplies Inc.",
-    phone: "+1 (555) 123-4567",
-    email: "info@timbersupplies.com",
-    address: "123 Oak Street, Portland, OR 97201",
-    type: "Vendor",
-  },
-  {
-    id: "2",
-    name: "ABC Corporation",
-    phone: "+1 (555) 234-5678",
-    email: "sales@abccorp.com",
-    address: "456 Business Ave, New York, NY 10001",
-    type: "Customer",
-  },
-  {
-    id: "3",
-    name: "Hardware Wholesale Ltd.",
-    phone: "+1 (555) 345-6789",
-    email: "orders@hardwarewholesale.com",
-    address: "789 Industrial Pkwy, Chicago, IL 60601",
-    type: "Vendor",
-  },
-  {
-    id: "4",
-    name: "Global Traders Inc.",
-    phone: "+1 (555) 456-7890",
-    email: "contact@globaltraders.com",
-    address: "321 Commerce Dr, Los Angeles, CA 90001",
-    type: "Customer",
-  },
-];
-
 const typeColors: Record<string, string> = {
   Vendor: "bg-blue-100 text-blue-800",
   Customer: "bg-green-100 text-green-800",
@@ -69,7 +34,20 @@ const typeColors: Record<string, string> = {
 
 export default function Contacts() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: contacts = [], isLoading } = useQuery({
+    queryKey: ["contacts"],
+    queryFn: async () => {
+      const response = await fetch("/api/contacts");
+      if (!response.ok) throw new Error("Failed to fetch contacts");
+      return response.json();
+    },
+  });
+
   const form = useForm({
     defaultValues: {
       name: "",
@@ -86,7 +64,17 @@ export default function Contacts() {
 
   const onSubmit = async (data: any) => {
     try {
-      console.log("Contact form data:", data);
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add contact");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
       toast({
         title: "Contact added",
         description: "New contact has been added successfully",
@@ -101,6 +89,15 @@ export default function Contacts() {
       });
     }
   };
+
+  const filteredContacts = contacts.filter((contact: any) => {
+    const matchesSearch = 
+      contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.phone?.includes(searchTerm);
+    const matchesType = typeFilter === "all" || contact.type === typeFilter;
+    return matchesSearch && matchesType;
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -206,17 +203,20 @@ export default function Contacts() {
                   placeholder="Search contacts..."
                   className="pl-10"
                   data-testid="input-search-contacts"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
-            <Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-48" data-testid="select-filter-type">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="vendor">Vendors</SelectItem>
-                <SelectItem value="customer">Customers</SelectItem>
+                <SelectItem value="Vendor">Vendors</SelectItem>
+                <SelectItem value="Customer">Customers</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -234,40 +234,63 @@ export default function Contacts() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contacts.map((contact) => (
-                  <TableRow key={contact.id} data-testid={`row-contact-${contact.id}`}>
-                    <TableCell className="font-medium">{contact.name}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone className="w-3 h-3 text-muted-foreground" />
-                          {contact.phone}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="w-3 h-3 text-muted-foreground" />
-                          {contact.email}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {contact.address}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={typeColors[contact.type]}>
-                        {contact.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        data-testid={`button-edit-${contact.id}`}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Loading contacts...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredContacts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No contacts found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredContacts.map((contact: any) => {
+                    const address = [
+                      contact.addressLine,
+                      contact.city,
+                      contact.state,
+                      contact.pincode,
+                      contact.country,
+                    ].filter(Boolean).join(", ");
+                    return (
+                      <TableRow key={contact.id} data-testid={`row-contact-${contact.id}`}>
+                        <TableCell className="font-medium">{contact.name}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="w-3 h-3 text-muted-foreground" />
+                              {contact.phone}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Mail className="w-3 h-3 text-muted-foreground" />
+                              {contact.email}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                          {address || "N/A"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={typeColors[contact.type]}>
+                            {contact.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-testid={`button-edit-${contact.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>

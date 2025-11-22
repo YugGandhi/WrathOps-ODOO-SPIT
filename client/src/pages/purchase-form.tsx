@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,95 +37,28 @@ interface ReceiptLineItem {
   pricePerUnit: number;
 }
 
-// Mock products for receipt with prices
-const mockProducts = [
-  { id: "1", name: "Oak Wood Plank", sku: "OWP-001", pricePerUnit: 12.50 },
-  { id: "2", name: "Metal Brackets Set", sku: "MBS-045", pricePerUnit: 8.75 },
-  { id: "3", name: "Paint - White Gloss", sku: "PNT-WG-5L", pricePerUnit: 45.00 },
-  { id: "4", name: "Screws Box (1000 pcs)", sku: "SCR-1000", pricePerUnit: 15.99 },
-  { id: "5", name: "Pine Wood Board", sku: "PWB-002", pricePerUnit: 9.25 },
-  { id: "6", name: "Steel Rods", sku: "STR-001", pricePerUnit: 18.50 },
-];
-
-// Mock suppliers - will be managed in state
-const initialSuppliers = [
-  { id: "1", name: "Timber Supplies Inc.", email: "contact@timbersupplies.com", phone: "+1-555-0101", address: "123 Timber St" },
-  { id: "2", name: "Hardware Wholesale Ltd.", email: "info@hardwarewholesale.com", phone: "+1-555-0102", address: "456 Hardware Ave" },
-  { id: "3", name: "Paint & Coating Co.", email: "sales@paintcoating.com", phone: "+1-555-0103", address: "789 Paint Blvd" },
-  { id: "4", name: "Metal Works Corp.", email: "contact@metalworks.com", phone: "+1-555-0104", address: "321 Metal Rd" },
-];
-
-// Mock warehouses with shortcodes
-const mockWarehouses = [
-  { id: "1", name: "Warehouse A", shortcode: "mw/za" },
-  { id: "2", name: "Warehouse B", shortcode: "mw/zb" },
-  { id: "3", name: "Warehouse C", shortcode: "mw/zc" },
-  { id: "4", name: "Main Warehouse", shortcode: "mw/main" },
-];
-
-// Mock existing receipts to generate next receipt number
-const existingReceipts = [
-  "REC/2024/0001",
-  "REC/2024/0002",
-  "REC/2024/0003",
-  "REC/2024/0004",
-];
-
-// Mock receipt orders for editing
-const mockReceiptOrders = [
-  {
-    id: "1",
-    receiptNumber: "REC/2024/0001",
-    supplierId: "1",
-    warehouseId: "1",
-    scheduledDate: "2024-01-10",
-    receiptDate: "2024-01-10",
-    status: "Draft",
-    lineItems: [
-      { productId: "1", productName: "Oak Wood Plank", sku: "OWP-001", quantityReceived: 50, pricePerUnit: 12.50 },
-      { productId: "5", productName: "Pine Wood Board", sku: "PWB-002", quantityReceived: 30, pricePerUnit: 9.25 },
-    ],
-  },
-  {
-    id: "2",
-    receiptNumber: "REC/2024/0002",
-    supplierId: "2",
-    warehouseId: "2",
-    scheduledDate: "2024-01-12",
-    receiptDate: "2024-01-12",
-    status: "Ready",
-    lineItems: [
-      { productId: "2", productName: "Metal Brackets Set", sku: "MBS-045", quantityReceived: 100, pricePerUnit: 8.75 },
-      { productId: "4", productName: "Screws Box (1000 pcs)", sku: "SCR-1000", quantityReceived: 25, pricePerUnit: 15.99 },
-    ],
-  },
-  {
-    id: "3",
-    receiptNumber: "REC/2024/0003",
-    supplierId: "4",
-    warehouseId: "1",
-    scheduledDate: "2024-01-15",
-    receiptDate: "2024-01-15",
-    status: "Done",
-    lineItems: [
-      { productId: "6", productName: "Steel Rods", sku: "STR-001", quantityReceived: 50, pricePerUnit: 18.50 },
-    ],
-  },
-];
-
 // Function to generate next receipt number
-const generateReceiptNumber = () => {
+const generateReceiptNumber = async (): Promise<string> => {
   const currentYear = new Date().getFullYear();
   const yearPrefix = `REC/${currentYear}/`;
   
-  // Find the highest number for this year
-  const numbers = existingReceipts
-    .filter(r => r.startsWith(yearPrefix))
-    .map(r => parseInt(r.replace(yearPrefix, "")))
-    .filter(n => !isNaN(n));
+  try {
+    const response = await fetch("/api/receipts");
+    if (response.ok) {
+      const receipts = await response.json();
+      const numbers = receipts
+        .filter((r: any) => r.receiptNumber?.startsWith(yearPrefix))
+        .map((r: any) => parseInt(r.receiptNumber.replace(yearPrefix, "")))
+        .filter((n: number) => !isNaN(n));
+      
+      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      return `${yearPrefix}${String(nextNumber).padStart(4, "0")}`;
+    }
+  } catch (error) {
+    console.error("Failed to fetch receipts for number generation", error);
+  }
   
-  const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-  return `${yearPrefix}${String(nextNumber).padStart(4, "0")}`;
+  return `${yearPrefix}0001`;
 };
 
 export default function ReceiptForm() {
@@ -135,11 +69,40 @@ export default function ReceiptForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<"Draft" | "Ready" | "Done">("Draft");
-  const [suppliers, setSuppliers] = useState(initialSuppliers);
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
   const [lineItems, setLineItems] = useState<ReceiptLineItem[]>([
     { id: "1", productId: "", productName: "", quantityReceived: 0, pricePerUnit: 0 }
   ]);
+
+  // Fetch suppliers
+  const { data: suppliers = [], refetch: refetchSuppliers } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: async () => {
+      const response = await fetch("/api/contacts?type=Vendor");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch warehouses
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouses");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch products
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return response.json();
+    },
+  });
 
   const form = useForm({
     defaultValues: {
@@ -168,35 +131,65 @@ export default function ReceiptForm() {
     },
   });
 
+  const { data: receiptData } = useQuery({
+    queryKey: ["receipt", receiptId],
+    queryFn: async () => {
+      if (!isEdit || !receiptId) return null;
+      const response = await fetch(`/api/receipts/${receiptId}`);
+      if (!response.ok) throw new Error("Failed to fetch receipt");
+      return response.json();
+    },
+    enabled: isEdit && !!receiptId,
+  });
+
+  const { data: receiptLineItems = [] } = useQuery({
+    queryKey: ["receipt-line-items", receiptId],
+    queryFn: async () => {
+      if (!isEdit || !receiptId) return [];
+      const response = await fetch(`/api/receipts/${receiptId}/line-items`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: isEdit && !!receiptId,
+  });
+
   // Load receipt data if editing
   useEffect(() => {
-    if (isEdit && receiptId) {
-      const receipt = mockReceiptOrders.find(r => r.id === receiptId);
-      if (receipt) {
-        form.reset({
-          receiptNumber: receipt.receiptNumber,
-          supplierId: receipt.supplierId,
-          warehouseId: receipt.warehouseId,
-          scheduledDate: receipt.scheduledDate,
-          receiptDate: receipt.receiptDate,
-        });
-        setCurrentStatus(receipt.status as "Draft" | "Ready" | "Done");
-        setLineItems(receipt.lineItems.map((item, index) => ({
-          id: String(index + 1),
-          productId: item.productId,
-          productName: item.productName,
-          quantityReceived: item.quantityReceived,
-          pricePerUnit: item.pricePerUnit,
-        })));
-      }
-    } else {
+    if (isEdit && receiptData) {
+      form.reset({
+        receiptNumber: receiptData.receiptNumber,
+        supplierId: receiptData.supplierId,
+        warehouseId: receiptData.warehouseId,
+        scheduledDate: receiptData.scheduledDate ? new Date(receiptData.scheduledDate).toISOString().split('T')[0] : "",
+        receiptDate: receiptData.receiptDate ? new Date(receiptData.receiptDate).toISOString().split('T')[0] : "",
+      });
+      setCurrentStatus(receiptData.status as "Draft" | "Ready" | "Done");
+    } else if (!isEdit) {
       // Auto-generate receipt number for new receipts
-      const receiptNumber = generateReceiptNumber();
-      form.setValue("receiptNumber", receiptNumber);
+      generateReceiptNumber().then((receiptNumber) => {
+        form.setValue("receiptNumber", receiptNumber);
+      });
       setCurrentStatus("Draft"); // Default status for new receipts
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, receiptId]);
+  }, [isEdit, receiptData]);
+
+  useEffect(() => {
+    if (isEdit && receiptLineItems.length > 0) {
+      const itemsWithProducts = receiptLineItems.map((item: any, index: number) => {
+        const product = products.find((p: any) => p.id === item.productId);
+        return {
+          id: String(index + 1),
+          productId: item.productId,
+          productName: product?.name || "",
+          quantityReceived: item.quantityReceived || 0,
+          pricePerUnit: parseFloat(item.pricePerUnit || 0),
+        };
+      });
+      setLineItems(itemsWithProducts.length > 0 ? itemsWithProducts : [{ id: "1", productId: "", productName: "", quantityReceived: 0, pricePerUnit: 0 }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, receiptLineItems, products]);
 
   const addLineItem = () => {
     setLineItems([
@@ -213,12 +206,12 @@ export default function ReceiptForm() {
     setLineItems(lineItems.map(item => {
       if (item.id === id) {
         if (field === "productId") {
-          const product = mockProducts.find(p => p.id === value);
+          const product = products.find((p: any) => p.id === value);
           return { 
             ...item, 
             [field]: value, 
             productName: product?.name || "",
-            pricePerUnit: product?.pricePerUnit || 0
+            pricePerUnit: product?.pricePerUnit ? parseFloat(product.pricePerUnit) : 0
           };
         }
         return { ...item, [field]: value };
@@ -233,24 +226,38 @@ export default function ReceiptForm() {
     );
   };
 
-  const handleAddNewSupplier = (data: any) => {
-    const newSupplier = {
-      id: String(Date.now()),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-    };
-    
-    setSuppliers([...suppliers, newSupplier]);
-    form.setValue("supplierId", newSupplier.id);
-    setShowNewSupplierDialog(false);
-    newSupplierForm.reset();
-    
-    toast({
-      title: "Supplier added",
-      description: `${data.name} has been added successfully`,
-    });
+  const handleAddNewSupplier = async (data: any) => {
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          type: "Vendor",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create supplier");
+      }
+
+      const newSupplier = await response.json();
+      form.setValue("supplierId", newSupplier.id);
+      setShowNewSupplierDialog(false);
+      newSupplierForm.reset();
+      refetchSuppliers(); // Refresh suppliers list
+      
+      toast({
+        title: "Supplier added",
+        description: `${data.name} has been added successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add supplier",
+        variant: "destructive",
+      });
+    }
   };
 
   const updateStatus = async (newStatus: "Draft" | "Ready" | "Done") => {
@@ -442,7 +449,7 @@ export default function ReceiptForm() {
                       <SelectValue placeholder="Select warehouse location" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockWarehouses.map((warehouse) => (
+                      {warehouses.map((warehouse: any) => (
                         <SelectItem key={warehouse.id} value={warehouse.id}>
                           {warehouse.shortcode} - {warehouse.name}
                         </SelectItem>
@@ -528,7 +535,7 @@ export default function ReceiptForm() {
                                 <SelectValue placeholder="Select product" />
                               </SelectTrigger>
                               <SelectContent>
-                                {mockProducts.map((product) => (
+                                {products.map((product: any) => (
                                   <SelectItem key={product.id} value={product.id}>
                                     {product.name} ({product.sku})
                                   </SelectItem>

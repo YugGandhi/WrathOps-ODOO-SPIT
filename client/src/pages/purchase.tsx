@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,62 +26,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Plus, Eye, Edit } from "lucide-react";
 
-// Mock warehouses with shortcodes
-const mockWarehouses: Record<string, string> = {
-  "1": "mw/za",
-  "2": "mw/zb",
-  "3": "mw/zc",
-  "4": "mw/main",
-};
-
-// Mock data - Receipts (Incoming Goods)
-const receipts = [
-  {
-    id: "1",
-    receiptNumber: "REC/2024/0001",
-    supplier: "Timber Supplies Inc.",
-    warehouseId: "1",
-    scheduledDate: "2024-01-10",
-    receiptDate: "2024-01-10",
-    totalItems: 80,
-    totalCost: 902.50, // (50 * 12.50) + (30 * 9.25) = 625 + 277.50
-    status: "Draft",
-  },
-  {
-    id: "2",
-    receiptNumber: "REC/2024/0002",
-    supplier: "Hardware Wholesale Ltd.",
-    warehouseId: "2",
-    scheduledDate: "2024-01-12",
-    receiptDate: "2024-01-12",
-    totalItems: 125,
-    totalCost: 1274.75, // (100 * 8.75) + (25 * 15.99) = 875 + 399.75
-    status: "Ready",
-  },
-  {
-    id: "3",
-    receiptNumber: "REC/2024/0003",
-    supplier: "Metal Works Corp.",
-    warehouseId: "1",
-    scheduledDate: "2024-01-15",
-    receiptDate: "2024-01-15",
-    totalItems: 50,
-    totalCost: 925.00, // 50 * 18.50
-    status: "Done",
-  },
-  {
-    id: "4",
-    receiptNumber: "REC/2024/0004",
-    supplier: "Paint & Coating Co.",
-    warehouseId: "2",
-    scheduledDate: "2024-01-18",
-    receiptDate: "2024-01-18",
-    totalItems: 35,
-    totalCost: 1575.00, // Example calculation
-    status: "Done",
-  },
-];
-
 const statusColors: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-800",
   Ready: "bg-blue-100 text-blue-800",
@@ -91,7 +36,83 @@ const statusColors: Record<string, string> = {
 export default function Purchase() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [receiptsList, setReceiptsList] = useState(receipts);
+
+  const { data: receipts = [], isLoading: receiptsLoading } = useQuery({
+    queryKey: ["receipts"],
+    queryFn: async () => {
+      const response = await fetch("/api/receipts");
+      if (!response.ok) throw new Error("Failed to fetch receipts");
+      return response.json();
+    },
+  });
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouses");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const { data: contacts = [] } = useQuery({
+    queryKey: ["contacts"],
+    queryFn: async () => {
+      const response = await fetch("/api/contacts");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const { data: receiptLineItemsMap = {} } = useQuery({
+    queryKey: ["receipt-line-items", receipts.map((r: any) => r.id)],
+    queryFn: async () => {
+      const itemsMap: Record<string, any[]> = {};
+      await Promise.all(
+        receipts.map(async (receipt: any) => {
+          try {
+            const response = await fetch(`/api/receipts/${receipt.id}/line-items`);
+            if (response.ok) {
+              itemsMap[receipt.id] = await response.json();
+            }
+          } catch (error) {
+            console.error(`Failed to fetch line items for receipt ${receipt.id}`, error);
+          }
+        })
+      );
+      return itemsMap;
+    },
+    enabled: receipts.length > 0,
+  });
+
+  const warehousesMap = warehouses.reduce((acc: Record<string, string>, w: any) => {
+    acc[w.id] = w.shortcode || w.name;
+    return acc;
+  }, {});
+
+  const contactsMap = contacts.reduce((acc: Record<string, string>, c: any) => {
+    acc[c.id] = c.name;
+    return acc;
+  }, {});
+
+  const receiptsWithTotals = receipts.map((receipt: any) => {
+    const lineItems = receiptLineItemsMap[receipt.id] || [];
+    const totalItems = lineItems.reduce((sum: number, item: any) => sum + (item.quantityReceived || 0), 0);
+    const totalCost = lineItems.reduce((sum: number, item: any) => {
+      const qty = item.quantityReceived || 0;
+      const price = parseFloat(item.pricePerUnit || 0);
+      return sum + (qty * price);
+    }, 0);
+    
+    return {
+      ...receipt,
+      totalItems,
+      totalCost,
+      supplier: contactsMap[receipt.supplierId] || "Unknown",
+      warehouseShortcode: warehousesMap[receipt.warehouseId] || "N/A",
+      receiptDate: receipt.receiptDate ? new Date(receipt.receiptDate).toISOString().split('T')[0] : "",
+    };
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -160,52 +181,66 @@ export default function Purchase() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {receiptsList.map((receipt) => (
-                  <TableRow
-                    key={receipt.id}
-                    data-testid={`row-receipt-${receipt.id}`}
-                  >
-                    <TableCell className="font-medium">{receipt.receiptNumber}</TableCell>
-                    <TableCell className="text-sm">{receipt.supplier}</TableCell>
-                    <TableCell className="text-sm">{mockWarehouses[receipt.warehouseId] || "N/A"}</TableCell>
-                    <TableCell className="text-sm">{receipt.receiptDate}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {receipt.totalItems} units
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${receipt.totalCost.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={statusColors[receipt.status]}
-                        data-testid={`badge-status-${receipt.id}`}
-                      >
-                        {receipt.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/purchase/receipt/${receipt.id}`)}
-                          data-testid={`button-view-receipt-${receipt.id}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/purchase/${receipt.id}/edit`)}
-                          data-testid={`button-edit-receipt-${receipt.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
+                {receiptsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      Loading receipts...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : receiptsWithTotals.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No receipts found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  receiptsWithTotals.map((receipt: any) => (
+                    <TableRow
+                      key={receipt.id}
+                      data-testid={`row-receipt-${receipt.id}`}
+                    >
+                      <TableCell className="font-medium">{receipt.receiptNumber}</TableCell>
+                      <TableCell className="text-sm">{receipt.supplier}</TableCell>
+                      <TableCell className="text-sm">{receipt.warehouseShortcode}</TableCell>
+                      <TableCell className="text-sm">{receipt.receiptDate}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {receipt.totalItems} units
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        ${receipt.totalCost.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={statusColors[receipt.status] || "bg-gray-100 text-gray-800"}
+                          data-testid={`badge-status-${receipt.id}`}
+                        >
+                          {receipt.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/purchase/receipt/${receipt.id}`)}
+                            data-testid={`button-view-receipt-${receipt.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/purchase/${receipt.id}/edit`)}
+                            data-testid={`button-edit-receipt-${receipt.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

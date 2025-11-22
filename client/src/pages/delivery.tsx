@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,46 +16,6 @@ import {
 } from "@/components/ui/table";
 import { Search, Plus, Eye, Edit } from "lucide-react";
 
-// Mock data - Delivery Orders (Outgoing Goods)
-const deliveryOrders = [
-  {
-    id: "1",
-    deliveryNumber: "DO/2024/0001",
-    customer: "ABC Corporation",
-    deliveryDate: "2024-01-12",
-    totalItems: 50,
-    totalCost: 4568.00,
-    status: "Picked",
-  },
-  {
-    id: "2",
-    deliveryNumber: "DO/2024/0002",
-    customer: "XYZ Limited",
-    deliveryDate: "2024-01-14",
-    totalItems: 75,
-    totalCost: 2835.00,
-    status: "Packed",
-  },
-  {
-    id: "3",
-    deliveryNumber: "DO/2024/0003",
-    customer: "Global Traders Inc.",
-    deliveryDate: "2024-01-15",
-    totalItems: 30,
-    totalCost: 1290.00,
-    status: "Validated",
-  },
-  {
-    id: "4",
-    deliveryNumber: "DO/2024/0004",
-    customer: "ABC Corporation",
-    deliveryDate: "2024-01-18",
-    totalItems: 100,
-    totalCost: 6520.00,
-    status: "Validated",
-  },
-];
-
 const statusColors: Record<string, string> = {
   Picked: "bg-blue-100 text-blue-800",
   Packed: "bg-yellow-100 text-yellow-800",
@@ -65,7 +26,68 @@ const statusColors: Record<string, string> = {
 
 export default function Delivery() {
   const [, setLocation] = useLocation();
-  const [deliveries, setDeliveries] = useState(deliveryOrders);
+
+  const { data: deliveryOrders = [], isLoading: deliveriesLoading } = useQuery({
+    queryKey: ["delivery-orders"],
+    queryFn: async () => {
+      const response = await fetch("/api/delivery-orders");
+      if (!response.ok) throw new Error("Failed to fetch delivery orders");
+      return response.json();
+    },
+  });
+
+  const { data: contacts = [] } = useQuery({
+    queryKey: ["contacts"],
+    queryFn: async () => {
+      const response = await fetch("/api/contacts");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const { data: deliveryLineItemsMap = {} } = useQuery({
+    queryKey: ["delivery-line-items", deliveryOrders.map((d: any) => d.id)],
+    queryFn: async () => {
+      const itemsMap: Record<string, any[]> = {};
+      await Promise.all(
+        deliveryOrders.map(async (delivery: any) => {
+          try {
+            const response = await fetch(`/api/delivery-orders/${delivery.id}/line-items`);
+            if (response.ok) {
+              itemsMap[delivery.id] = await response.json();
+            }
+          } catch (error) {
+            console.error(`Failed to fetch line items for delivery ${delivery.id}`, error);
+          }
+        })
+      );
+      return itemsMap;
+    },
+    enabled: deliveryOrders.length > 0,
+  });
+
+  const contactsMap = contacts.reduce((acc: Record<string, string>, c: any) => {
+    acc[c.id] = c.name;
+    return acc;
+  }, {});
+
+  const deliveriesWithTotals = deliveryOrders.map((delivery: any) => {
+    const lineItems = deliveryLineItemsMap[delivery.id] || [];
+    const totalItems = lineItems.reduce((sum: number, item: any) => sum + (item.quantityPacked || 0), 0);
+    const totalCost = lineItems.reduce((sum: number, item: any) => {
+      const qty = item.quantityPacked || 0;
+      const price = parseFloat(item.pricePerUnit || 0);
+      return sum + (qty * price);
+    }, 0);
+    
+    return {
+      ...delivery,
+      totalItems,
+      totalCost,
+      customer: contactsMap[delivery.customerId] || "Unknown",
+      deliveryDate: delivery.deliveryDate ? new Date(delivery.deliveryDate).toISOString().split('T')[0] : "",
+    };
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -136,51 +158,65 @@ export default function Delivery() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deliveries.map((delivery) => (
-                  <TableRow
-                    key={delivery.id}
-                    data-testid={`row-delivery-${delivery.id}`}
-                  >
-                    <TableCell className="font-medium">{delivery.deliveryNumber}</TableCell>
-                    <TableCell className="text-sm">{delivery.customer}</TableCell>
-                    <TableCell className="text-sm">{delivery.deliveryDate}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {delivery.totalItems} units
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${delivery.totalCost.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={statusColors[delivery.status]}
-                        data-testid={`badge-status-${delivery.id}`}
-                      >
-                        {delivery.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/delivery/${delivery.id}`)}
-                          data-testid={`button-view-delivery-${delivery.id}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/delivery/${delivery.id}/edit`)}
-                          data-testid={`button-edit-delivery-${delivery.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
+                {deliveriesLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      Loading delivery orders...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : deliveriesWithTotals.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No delivery orders found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  deliveriesWithTotals.map((delivery: any) => (
+                    <TableRow
+                      key={delivery.id}
+                      data-testid={`row-delivery-${delivery.id}`}
+                    >
+                      <TableCell className="font-medium">{delivery.deliveryNumber}</TableCell>
+                      <TableCell className="text-sm">{delivery.customer}</TableCell>
+                      <TableCell className="text-sm">{delivery.deliveryDate}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {delivery.totalItems} units
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        ${delivery.totalCost.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={statusColors[delivery.status] || "bg-gray-100 text-gray-800"}
+                          data-testid={`badge-status-${delivery.id}`}
+                        >
+                          {delivery.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/delivery/${delivery.id}`)}
+                            data-testid={`button-view-delivery-${delivery.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/delivery/${delivery.id}/edit`)}
+                            data-testid={`button-edit-delivery-${delivery.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

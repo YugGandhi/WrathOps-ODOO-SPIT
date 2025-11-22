@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,46 +17,6 @@ import {
 } from "@/components/ui/table";
 import { Search, Plus, LayoutGrid, List } from "lucide-react";
 
-// Mock data
-const manufacturingOrders = [
-  {
-    id: "1",
-    reference: "WH/MO/0001",
-    contact: "Internal Production",
-    scheduleDate: "2024-01-20",
-    status: "Ready",
-    quantity: 50,
-    unitOfMeasure: "pieces",
-  },
-  {
-    id: "2",
-    reference: "WH/MO/0002",
-    contact: "Custom Order - ABC Corp",
-    scheduleDate: "2024-01-22",
-    status: "In Progress",
-    quantity: 30,
-    unitOfMeasure: "pieces",
-  },
-  {
-    id: "3",
-    reference: "WH/MO/0003",
-    contact: "Internal Production",
-    scheduleDate: "2024-01-25",
-    status: "Draft",
-    quantity: 100,
-    unitOfMeasure: "pieces",
-  },
-  {
-    id: "4",
-    reference: "WH/MO/0004",
-    contact: "Custom Order - XYZ Ltd",
-    scheduleDate: "2024-01-18",
-    status: "Done",
-    quantity: 25,
-    unitOfMeasure: "pieces",
-  },
-];
-
 const statusColors: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-800",
   Ready: "bg-blue-100 text-blue-800",
@@ -67,13 +28,22 @@ export default function Manufacturing() {
   const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
-  const groupedByStatus = manufacturingOrders.reduce((acc, order) => {
+  const { data: manufacturingOrders = [], isLoading } = useQuery({
+    queryKey: ["manufacturing-orders"],
+    queryFn: async () => {
+      const response = await fetch("/api/manufacturing-orders");
+      if (!response.ok) throw new Error("Failed to fetch manufacturing orders");
+      return response.json();
+    },
+  });
+
+  const groupedByStatus = manufacturingOrders.reduce((acc: Record<string, any[]>, order: any) => {
     if (!acc[order.status]) {
       acc[order.status] = [];
     }
     acc[order.status].push(order);
     return acc;
-  }, {} as Record<string, typeof manufacturingOrders>);
+  }, {});
 
   return (
     <div className="p-6 space-y-6">
@@ -155,30 +125,46 @@ export default function Manufacturing() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {manufacturingOrders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className="cursor-pointer hover-elevate"
-                      onClick={() => setLocation(`/manufacturing/${order.id}`)}
-                      data-testid={`row-mo-${order.id}`}
-                    >
-                      <TableCell className="font-medium">{order.reference}</TableCell>
-                      <TableCell className="text-sm">{order.contact}</TableCell>
-                      <TableCell className="text-sm">{order.scheduleDate}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {order.quantity} {order.unitOfMeasure}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={statusColors[order.status]}
-                          data-testid={`badge-status-${order.id}`}
-                        >
-                          {order.status}
-                        </Badge>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        Loading manufacturing orders...
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : manufacturingOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No manufacturing orders found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    manufacturingOrders.map((order: any) => (
+                      <TableRow
+                        key={order.id}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => setLocation(`/manufacturing/${order.id}`)}
+                        data-testid={`row-mo-${order.id}`}
+                      >
+                        <TableCell className="font-medium">{order.reference}</TableCell>
+                        <TableCell className="text-sm">{order.contact || "N/A"}</TableCell>
+                        <TableCell className="text-sm">
+                          {order.scheduleDate ? new Date(order.scheduleDate).toISOString().split('T')[0] : "N/A"}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {order.quantity || 0} {order.unitOfMeasure || ""}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={statusColors[order.status] || "bg-gray-100 text-gray-800"}
+                            data-testid={`badge-status-${order.id}`}
+                          >
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -197,7 +183,7 @@ export default function Manufacturing() {
                       </Badge>
                     </div>
                     <div className="space-y-3">
-                      {groupedByStatus[status]?.map((order) => (
+                      {groupedByStatus[status]?.map((order: any) => (
                         <Card
                           key={order.id}
                           className="cursor-pointer hover-elevate"
@@ -206,11 +192,13 @@ export default function Manufacturing() {
                         >
                           <CardContent className="p-4 space-y-2">
                             <p className="font-medium text-sm">{order.reference}</p>
-                            <p className="text-xs text-muted-foreground">{order.contact}</p>
+                            <p className="text-xs text-muted-foreground">{order.contact || "N/A"}</p>
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">{order.scheduleDate}</span>
+                              <span className="text-muted-foreground">
+                                {order.scheduleDate ? new Date(order.scheduleDate).toISOString().split('T')[0] : "N/A"}
+                              </span>
                               <span className="font-medium">
-                                {order.quantity} {order.unitOfMeasure}
+                                {order.quantity || 0} {order.unitOfMeasure || ""}
                               </span>
                             </div>
                           </CardContent>

@@ -1,4 +1,5 @@
 import { useRoute, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,56 +13,6 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Printer, Download } from "lucide-react";
 
-// Mock warehouses with shortcodes
-const mockWarehouses: Record<string, string> = {
-  "1": "mw/za",
-  "2": "mw/zb",
-  "3": "mw/zc",
-  "4": "mw/main",
-};
-
-// Mock receipt data
-const mockReceipts = [
-  {
-    id: "1",
-    receiptNumber: "REC/2024/0001",
-    supplier: "Timber Supplies Inc.",
-    warehouseId: "1",
-    scheduledDate: "2024-01-10",
-    receiptDate: "2024-01-10",
-    status: "Draft",
-    lineItems: [
-      { productName: "Oak Wood Plank", sku: "OWP-001", quantityReceived: 50, pricePerUnit: 12.50 },
-      { productName: "Pine Wood Board", sku: "PWB-002", quantityReceived: 30, pricePerUnit: 9.25 },
-    ],
-  },
-  {
-    id: "2",
-    receiptNumber: "REC/2024/0002",
-    supplier: "Hardware Wholesale Ltd.",
-    warehouseId: "2",
-    scheduledDate: "2024-01-12",
-    receiptDate: "2024-01-12",
-    status: "Ready",
-    lineItems: [
-      { productName: "Metal Brackets Set", sku: "MBS-045", quantityReceived: 100, pricePerUnit: 8.75 },
-      { productName: "Screws Box (1000 pcs)", sku: "SCR-1000", quantityReceived: 25, pricePerUnit: 15.99 },
-    ],
-  },
-  {
-    id: "3",
-    receiptNumber: "REC/2024/0003",
-    supplier: "Metal Works Corp.",
-    warehouseId: "1",
-    scheduledDate: "2024-01-15",
-    receiptDate: "2024-01-15",
-    status: "Done",
-    lineItems: [
-      { productName: "Steel Rods", sku: "STR-001", quantityReceived: 50, pricePerUnit: 18.50 },
-    ],
-  },
-];
-
 const statusColors: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-800",
   Ready: "bg-blue-100 text-blue-800",
@@ -73,14 +24,89 @@ export default function ReceiptDetails() {
   const [, setLocation] = useLocation();
 
   const receiptId = params?.id;
-  const receipt = receiptId ? mockReceipts.find(r => r.id === receiptId) : null;
+
+  // Fetch receipt
+  const { data: receipt, isLoading: receiptLoading } = useQuery({
+    queryKey: ["receipt", receiptId],
+    queryFn: async () => {
+      if (!receiptId) return null;
+      const response = await fetch(`/api/receipts/${receiptId}`);
+      if (!response.ok) throw new Error("Failed to fetch receipt");
+      return response.json();
+    },
+    enabled: !!receiptId,
+  });
+
+  // Fetch receipt line items
+  const { data: lineItems = [] } = useQuery({
+    queryKey: ["receipt-line-items", receiptId],
+    queryFn: async () => {
+      if (!receiptId) return [];
+      const response = await fetch(`/api/receipts/${receiptId}/line-items`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!receiptId,
+  });
+
+  // Fetch warehouses
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouses");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch supplier
+  const { data: supplier } = useQuery({
+    queryKey: ["supplier", receipt?.supplierId],
+    queryFn: async () => {
+      if (!receipt?.supplierId) return null;
+      const response = await fetch(`/api/contacts/${receipt.supplierId}`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!receipt?.supplierId,
+  });
+
+  // Fetch products for line items
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
 
   const calculateTotal = () => {
-    if (!receipt) return 0;
-    return receipt.lineItems.reduce((sum, item) => 
-      sum + (item.quantityReceived * item.pricePerUnit), 0
+    if (!lineItems.length) return 0;
+    return lineItems.reduce((sum: number, item: any) => 
+      sum + (item.quantityReceived * parseFloat(item.pricePerUnit || 0)), 0
     );
   };
+
+  const getWarehouseShortcode = (warehouseId: string) => {
+    const warehouse = warehouses.find((w: any) => w.id === warehouseId);
+    return warehouse?.shortcode || "N/A";
+  };
+
+  const getProductInfo = (productId: string) => {
+    const product = products.find((p: any) => p.id === productId);
+    return product ? { name: product.name, sku: product.sku } : { name: "Unknown", sku: "N/A" };
+  };
+
+  if (receiptLoading) {
+    return (
+      <div className="p-6">
+        <p>Loading receipt...</p>
+      </div>
+    );
+  }
+
+  if (!receipt) {
 
   const handlePrint = () => {
     const printContent = document.getElementById("receipt-content");
@@ -121,21 +147,26 @@ RECEIPT DETAILS
 ================
 
 Receipt Number: ${receipt.receiptNumber}
-Supplier: ${receipt.supplier}
-To (Location Shortcode): ${mockWarehouses[receipt.warehouseId] || "N/A"}
-Scheduled Date: ${receipt.scheduledDate}
-Receipt Date: ${receipt.receiptDate}
+Supplier: ${supplier?.name || "N/A"}
+To (Location Shortcode): ${getWarehouseShortcode(receipt.warehouseId)}
+Scheduled Date: ${receipt.scheduledDate ? new Date(receipt.scheduledDate).toLocaleDateString() : "N/A"}
+Receipt Date: ${receipt.receiptDate ? new Date(receipt.receiptDate).toLocaleDateString() : "N/A"}
 Status: ${receipt.status}
 
 PRODUCTS RECEIVED
 =================
 
-${receipt.lineItems.map((item, index) => `
-${index + 1}. ${item.productName} (${item.sku})
-   Quantity: ${item.quantityReceived}
-   Price per Unit: $${item.pricePerUnit.toFixed(2)}
-   Total: $${(item.quantityReceived * item.pricePerUnit).toFixed(2)}
-`).join('')}
+${lineItems.map((item: any, index: number) => {
+  const productInfo = getProductInfo(item.productId);
+  const price = parseFloat(item.pricePerUnit || 0);
+  const qty = item.quantityReceived || 0;
+  return `
+${index + 1}. ${productInfo.name} (${productInfo.sku})
+   Quantity: ${qty}
+   Price per Unit: $${price.toFixed(2)}
+   Total: $${(qty * price).toFixed(2)}
+`;
+}).join('')}
 
 GRAND TOTAL: $${calculateTotal().toFixed(2)}
 
@@ -227,19 +258,23 @@ Generated on: ${new Date().toLocaleString()}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Supplier</p>
-                <p className="font-medium">{receipt.supplier}</p>
+                <p className="font-medium">{supplier?.name || "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">To (Location Shortcode)</p>
-                <p className="font-medium">{mockWarehouses[receipt.warehouseId] || "N/A"}</p>
+                <p className="font-medium">{getWarehouseShortcode(receipt.warehouseId)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Scheduled Date</p>
-                <p className="font-medium">{receipt.scheduledDate}</p>
+                <p className="font-medium">
+                  {receipt.scheduledDate ? new Date(receipt.scheduledDate).toLocaleDateString() : "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Receipt Date</p>
-                <p className="font-medium">{receipt.receiptDate}</p>
+                <p className="font-medium">
+                  {receipt.receiptDate ? new Date(receipt.receiptDate).toLocaleDateString() : "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Status</p>
@@ -250,7 +285,7 @@ Generated on: ${new Date().toLocaleString()}
               <div>
                 <p className="text-sm text-muted-foreground">Total Items</p>
                 <p className="font-medium">
-                  {receipt.lineItems.reduce((sum, item) => sum + item.quantityReceived, 0)} units
+                  {lineItems.reduce((sum: number, item: any) => sum + (item.quantityReceived || 0), 0)} units
                 </p>
               </div>
             </div>
@@ -274,23 +309,36 @@ Generated on: ${new Date().toLocaleString()}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {receipt.lineItems.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{item.productName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {item.sku}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {item.quantityReceived}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${item.pricePerUnit.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        ${(item.quantityReceived * item.pricePerUnit).toFixed(2)}
+                  {lineItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No line items found
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    lineItems.map((item: any, index: number) => {
+                      const productInfo = getProductInfo(item.productId);
+                      const price = parseFloat(item.pricePerUnit || 0);
+                      const qty = item.quantityReceived || 0;
+                      return (
+                        <TableRow key={item.id || index}>
+                          <TableCell className="font-medium">{productInfo.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {productInfo.sku}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {qty}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            ${price.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            ${(qty * price).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -323,5 +371,4 @@ Generated on: ${new Date().toLocaleString()}
       </div>
     </div>
   );
-}
-
+}}

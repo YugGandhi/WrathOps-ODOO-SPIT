@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Check, X } from "lucide-react";
+import { Check, X } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 const signupSchema = z.object({
   loginId: z.string().min(1, "Login ID is required"),
@@ -35,6 +36,14 @@ export default function Signup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      setLocation("/dashboard");
+    }
+  }, [setLocation]);
   
   const form = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
@@ -69,12 +78,17 @@ export default function Signup() {
         throw new Error(error.error || "Signup failed");
       }
       
+      const result = await response.json();
+      
+      // Auto-login after signup
+      localStorage.setItem("user", JSON.stringify(result.user));
+      
       toast({
         title: "Account created successfully",
-        description: "Please login with your credentials",
+        description: "Welcome to StockMaster",
       });
       
-      setLocation("/login");
+      setLocation("/dashboard");
     } catch (error) {
       toast({
         title: "Signup failed",
@@ -91,12 +105,10 @@ export default function Signup() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <div className="w-12 h-12 rounded-md bg-primary flex items-center justify-center">
-              <Package className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <Logo className="h-16 w-16" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-semibold">Create Account</CardTitle>
+            <CardTitle className="text-2xl font-semibold text-blue-600">Create Account</CardTitle>
             <CardDescription className="text-sm mt-2">
               Sign up for StockMaster
             </CardDescription>

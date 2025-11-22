@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,67 +16,22 @@ import {
 } from "@/components/ui/table";
 import { Search, Plus, Eye, Edit, Settings } from "lucide-react";
 
-// Mock data
-const products = [
-  {
-    id: "1",
-    name: "Oak Wood Plank",
-    sku: "OWP-001",
-    category: "Raw Materials",
-    onHand: 450,
-    reserved: 120,
-    pricePerUnit: 12.50,
-    location: "Warehouse A - Zone 1",
-  },
-  {
-    id: "2",
-    name: "Metal Brackets Set",
-    sku: "MBS-045",
-    category: "Hardware",
-    onHand: 1200,
-    reserved: 300,
-    pricePerUnit: 8.75,
-    location: "Warehouse A - Zone 2",
-  },
-  {
-    id: "3",
-    name: "Paint - White Gloss",
-    sku: "PNT-WG-5L",
-    category: "Finishing",
-    onHand: 15,
-    reserved: 10,
-    pricePerUnit: 45.00,
-    location: "Warehouse B - Zone 1",
-  },
-  {
-    id: "4",
-    name: "Screws Box (1000 pcs)",
-    sku: "SCR-1000",
-    category: "Hardware",
-    onHand: 85,
-    reserved: 25,
-    pricePerUnit: 15.99,
-    location: "Warehouse A - Zone 2",
-  },
-  {
-    id: "5",
-    name: "Pine Wood Board",
-    sku: "PWB-002",
-    category: "Raw Materials",
-    onHand: 5,
-    reserved: 0,
-    pricePerUnit: 9.25,
-    location: "Warehouse A - Zone 1",
-  },
-];
-
 export default function Inventory() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getLowStockBadge = (onHand: number) => {
-    // Low stock threshold: less than 10 units
-    if (onHand < 10) {
+  const { data: products = [], isLoading, error } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return response.json();
+    },
+  });
+
+  const getLowStockBadge = (onHand: number, minimumQuantity?: number) => {
+    const threshold = minimumQuantity || 10;
+    if (onHand < threshold) {
       return (
         <Badge variant="destructive" className="text-xs">
           Low Stock
@@ -84,6 +40,31 @@ export default function Inventory() {
     }
     return null;
   };
+
+  const filteredProducts = products.filter((product: any) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      product.name?.toLowerCase().includes(searchLower) ||
+      product.sku?.toLowerCase().includes(searchLower) ||
+      product.category?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <p>Loading products...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-destructive">Error loading products. Please try again.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -170,65 +151,76 @@ export default function Inventory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => {
-                  const freeToUse = product.onHand - product.reserved;
-                  return (
-                    <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {product.name}
-                          {getLowStockBadge(product.onHand)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {product.sku}
-                      </TableCell>
-                      <TableCell className="text-sm">{product.category}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {product.onHand}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {product.reserved}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {freeToUse}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${product.pricePerUnit.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {product.location}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setLocation(`/inventory/${product.id}`)}
-                            data-testid={`button-view-${product.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setLocation(`/inventory/${product.id}/edit`)}
-                            data-testid={`button-edit-${product.id}`}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            data-testid={`button-adjust-${product.id}`}
-                          >
-                            <Settings className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      No products found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map((product: any) => {
+                    const onHand = product.onHandQuantity || 0;
+                    const reserved = product.reservedQuantity || 0;
+                    const freeToUse = onHand - reserved;
+                    const pricePerUnit = product.pricePerUnit ? parseFloat(product.pricePerUnit) : 0;
+                    return (
+                      <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {product.name}
+                            {getLowStockBadge(onHand, product.minimumQuantity)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {product.sku}
+                        </TableCell>
+                        <TableCell className="text-sm">{product.category}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {onHand}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {reserved}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {freeToUse}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          ${pricePerUnit.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {product.location}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setLocation(`/inventory/${product.id}`)}
+                              data-testid={`button-view-${product.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setLocation(`/inventory/${product.id}/edit`)}
+                              data-testid={`button-edit-${product.id}`}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              data-testid={`button-adjust-${product.id}`}
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>

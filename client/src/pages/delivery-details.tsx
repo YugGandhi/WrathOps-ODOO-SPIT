@@ -1,4 +1,5 @@
 import { useRoute, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,48 +13,83 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Printer, Download } from "lucide-react";
 
-// Mock delivery data
-const mockDeliveries = [
-  {
-    id: "1",
-    deliveryNumber: "DO/2024/0001",
-    customer: "ABC Corporation",
-    deliveryDate: "2024-01-12",
-    status: "Validated",
-    lineItems: [
-      { productName: "Oak Wood Plank", sku: "OWP-001", quantityPicked: 50, quantityPacked: 50, pricePerUnit: 12.50 },
-      { productName: "Metal Brackets Set", sku: "MBS-045", quantityPicked: 30, quantityPacked: 30, pricePerUnit: 8.75 },
-    ],
-  },
-  {
-    id: "2",
-    deliveryNumber: "DO/2024/0002",
-    customer: "XYZ Limited",
-    deliveryDate: "2024-01-14",
-    status: "Validated",
-    lineItems: [
-      { productName: "Paint - White Gloss", sku: "PNT-WG-5L", quantityPicked: 20, quantityPacked: 20, pricePerUnit: 45.00 },
-      { productName: "Screws Box (1000 pcs)", sku: "SCR-1000", quantityPicked: 15, quantityPacked: 15, pricePerUnit: 15.99 },
-    ],
-  },
-  {
-    id: "3",
-    deliveryNumber: "DO/2024/0003",
-    customer: "Global Traders Inc.",
-    deliveryDate: "2024-01-15",
-    status: "Validated",
-    lineItems: [
-      { productName: "Steel Rods", sku: "STR-001", quantityPicked: 30, quantityPacked: 30, pricePerUnit: 18.50 },
-    ],
-  },
-];
+const statusColors: Record<string, string> = {
+  Picked: "bg-blue-100 text-blue-800",
+  Packed: "bg-yellow-100 text-yellow-800",
+  Validated: "bg-green-100 text-green-800",
+};
 
 export default function DeliveryDetails() {
   const [match, params] = useRoute("/delivery/:id");
   const [, setLocation] = useLocation();
 
   const deliveryId = params?.id;
-  const delivery = deliveryId ? mockDeliveries.find(d => d.id === deliveryId) : null;
+
+  // Fetch delivery order
+  const { data: delivery, isLoading: deliveryLoading } = useQuery({
+    queryKey: ["delivery-order", deliveryId],
+    queryFn: async () => {
+      if (!deliveryId) return null;
+      const response = await fetch(`/api/delivery-orders/${deliveryId}`);
+      if (!response.ok) throw new Error("Failed to fetch delivery order");
+      return response.json();
+    },
+    enabled: !!deliveryId,
+  });
+
+  // Fetch delivery line items
+  const { data: lineItems = [] } = useQuery({
+    queryKey: ["delivery-line-items", deliveryId],
+    queryFn: async () => {
+      if (!deliveryId) return [];
+      const response = await fetch(`/api/delivery-orders/${deliveryId}/line-items`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!deliveryId,
+  });
+
+  // Fetch customer
+  const { data: customer } = useQuery({
+    queryKey: ["customer", delivery?.customerId],
+    queryFn: async () => {
+      if (!delivery?.customerId) return null;
+      const response = await fetch(`/api/contacts/${delivery.customerId}`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!delivery?.customerId,
+  });
+
+  // Fetch products for line items
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const getProductInfo = (productId: string) => {
+    const product = products.find((p: any) => p.id === productId);
+    return product ? { name: product.name, sku: product.sku } : { name: "Unknown", sku: "N/A" };
+  };
+
+  const calculateTotal = () => {
+    if (!lineItems.length) return 0;
+    return lineItems.reduce((sum: number, item: any) => 
+      sum + (item.quantityPacked * parseFloat(item.pricePerUnit || 0)), 0
+    );
+  };
+
+  if (deliveryLoading) {
+    return (
+      <div className="p-6">
+        <p>Loading delivery order...</p>
+      </div>
+    );
+  }
 
   if (!delivery) {
     return (
@@ -76,12 +112,6 @@ export default function DeliveryDetails() {
       </div>
     );
   }
-
-  const calculateTotal = () => {
-    return delivery.lineItems.reduce((sum, item) => 
-      sum + (item.quantityPacked * item.pricePerUnit), 0
-    );
-  };
 
   const handlePrint = () => {
     const printContent = document.getElementById("delivery-content");
@@ -122,20 +152,26 @@ DELIVERY ORDER DETAILS
 ======================
 
 Delivery Number: ${delivery.deliveryNumber}
-Customer: ${delivery.customer}
-Delivery Date: ${delivery.deliveryDate}
+Customer: ${customer?.name || "N/A"}
+Delivery Date: ${delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString() : "N/A"}
 Status: ${delivery.status}
 
 ITEMS DELIVERED
 ===============
 
-${delivery.lineItems.map((item, index) => `
-${index + 1}. ${item.productName} (${item.sku})
-   Quantity Picked: ${item.quantityPicked}
-   Quantity Packed: ${item.quantityPacked}
-   Price per Unit: $${item.pricePerUnit.toFixed(2)}
-   Total: $${(item.quantityPacked * item.pricePerUnit).toFixed(2)}
-`).join('')}
+${lineItems.map((item: any, index: number) => {
+  const productInfo = getProductInfo(item.productId);
+  const price = parseFloat(item.pricePerUnit || 0);
+  const picked = item.quantityPicked || 0;
+  const packed = item.quantityPacked || 0;
+  return `
+${index + 1}. ${productInfo.name} (${productInfo.sku})
+   Quantity Picked: ${picked}
+   Quantity Packed: ${packed}
+   Price per Unit: $${price.toFixed(2)}
+   Total: $${(packed * price).toFixed(2)}
+`;
+}).join('')}
 
 GRAND TOTAL: $${calculateTotal().toFixed(2)}
 
@@ -192,7 +228,7 @@ Generated on: ${new Date().toLocaleString()}
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Delivery Information</CardTitle>
-              <Badge className="bg-green-100 text-green-800">
+              <Badge className={statusColors[delivery.status] || "bg-gray-100 text-gray-800"}>
                 {delivery.status}
               </Badge>
             </div>
@@ -205,16 +241,18 @@ Generated on: ${new Date().toLocaleString()}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Customer</p>
-                <p className="font-medium">{delivery.customer}</p>
+                <p className="font-medium">{customer?.name || "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Delivery Date</p>
-                <p className="font-medium">{delivery.deliveryDate}</p>
+                <p className="font-medium">
+                  {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString() : "N/A"}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Items</p>
                 <p className="font-medium">
-                  {delivery.lineItems.reduce((sum, item) => sum + item.quantityPacked, 0)} units
+                  {lineItems.reduce((sum: number, item: any) => sum + (item.quantityPacked || 0), 0)} units
                 </p>
               </div>
             </div>
@@ -239,26 +277,40 @@ Generated on: ${new Date().toLocaleString()}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {delivery.lineItems.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{item.productName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {item.sku}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {item.quantityPicked}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {item.quantityPacked}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${item.pricePerUnit.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        ${(item.quantityPacked * item.pricePerUnit).toFixed(2)}
+                  {lineItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No line items found
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    lineItems.map((item: any, index: number) => {
+                      const productInfo = getProductInfo(item.productId);
+                      const price = parseFloat(item.pricePerUnit || 0);
+                      const picked = item.quantityPicked || 0;
+                      const packed = item.quantityPacked || 0;
+                      return (
+                        <TableRow key={item.id || index}>
+                          <TableCell className="font-medium">{productInfo.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {productInfo.sku}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {picked}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {packed}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            ${price.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            ${(packed * price).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>

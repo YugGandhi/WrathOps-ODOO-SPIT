@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   email: text("email").notNull().unique(),
   role: text("role").notNull(), // 'Inventory Manager' or 'Warehouse Staff'
+  resetToken: text("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true }).extend({
@@ -36,8 +38,8 @@ export const products = pgTable("products", {
   description: text("description"),
   onHandQuantity: integer("on_hand_quantity").notNull().default(0),
   reservedQuantity: integer("reserved_quantity").notNull().default(0),
-  forecastedQuantity: integer("forecasted_quantity").notNull().default(0),
-  location: text("location").notNull(),
+  pricePerUnit: decimal("price_per_unit", { precision: 10, scale: 2 }).default("0"),
+  locationId: varchar("location_id").references(() => locations.id, { onDelete: "set null" }),
   minimumQuantity: integer("minimum_quantity").default(0),
   preferredSupplier: text("preferred_supplier"),
 });
@@ -198,3 +200,102 @@ export const companySettings = pgTable("company_settings", {
 export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({ id: true });
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type CompanySettings = typeof companySettings.$inferSelect;
+
+// Warehouses
+export const warehouses = pgTable("warehouses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  shortcode: text("shortcode").notNull().unique(),
+  address: text("address"),
+});
+
+export const insertWarehouseSchema = createInsertSchema(warehouses).omit({ id: true });
+export type InsertWarehouse = z.infer<typeof insertWarehouseSchema>;
+export type Warehouse = typeof warehouses.$inferSelect;
+
+// Locations (within warehouses - e.g., racks, zones, rooms)
+export const locations = pgTable("locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  shortcode: text("shortcode").notNull().unique(),
+  warehouseId: varchar("warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
+  description: text("description"),
+});
+
+export const insertLocationSchema = createInsertSchema(locations).omit({ id: true });
+export type InsertLocation = z.infer<typeof insertLocationSchema>;
+export type Location = typeof locations.$inferSelect;
+
+// Receipts (Incoming Goods)
+export const receipts = pgTable("receipts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  receiptNumber: text("receipt_number").notNull().unique(),
+  supplierId: varchar("supplier_id").notNull(),
+  warehouseId: varchar("warehouse_id").notNull(),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  receiptDate: timestamp("receipt_date").notNull(),
+  status: text("status").notNull(), // Draft, Ready, Done
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertReceiptSchema = createInsertSchema(receipts).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertReceipt = z.infer<typeof insertReceiptSchema>;
+export type Receipt = typeof receipts.$inferSelect;
+
+// Receipt Line Items
+export const receiptLineItems = pgTable("receipt_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  receiptId: varchar("receipt_id").notNull(),
+  productId: varchar("product_id").notNull(),
+  quantityReceived: integer("quantity_received").notNull(),
+  pricePerUnit: decimal("price_per_unit", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const insertReceiptLineItemSchema = createInsertSchema(receiptLineItems).omit({ id: true });
+export type InsertReceiptLineItem = z.infer<typeof insertReceiptLineItemSchema>;
+export type ReceiptLineItem = typeof receiptLineItems.$inferSelect;
+
+// Delivery Orders (Outgoing Goods)
+export const deliveryOrders = pgTable("delivery_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deliveryNumber: text("delivery_number").notNull().unique(),
+  customerId: varchar("customer_id").notNull(),
+  deliveryDate: timestamp("delivery_date").notNull(),
+  status: text("status").notNull(), // Picked, Packed, Validated
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDeliveryOrderSchema = createInsertSchema(deliveryOrders).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertDeliveryOrder = z.infer<typeof insertDeliveryOrderSchema>;
+export type DeliveryOrder = typeof deliveryOrders.$inferSelect;
+
+// Delivery Order Line Items
+export const deliveryLineItems = pgTable("delivery_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deliveryId: varchar("delivery_id").notNull(),
+  productId: varchar("product_id").notNull(),
+  quantityPicked: integer("quantity_picked").notNull(),
+  quantityPacked: integer("quantity_packed").notNull().default(0),
+  pricePerUnit: decimal("price_per_unit", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const insertDeliveryLineItemSchema = createInsertSchema(deliveryLineItems).omit({ id: true });
+export type InsertDeliveryLineItem = z.infer<typeof insertDeliveryLineItemSchema>;
+export type DeliveryLineItem = typeof deliveryLineItems.$inferSelect;
+
+// Password Reset Tokens (using OTP)
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  otp: text("otp").notNull(), // 6-digit OTP code
+  token: text("token").notNull().unique(), // Token for password reset after OTP verification
+  expiresAt: timestamp("expires_at").notNull(),
+  used: integer("used").notNull().default(0), // 0 = false, 1 = true
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;

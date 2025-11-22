@@ -65,6 +65,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ message: "If the email exists, an OTP has been sent" });
+      }
+
+      // Generate and store OTP
+      const { otp, token } = await storage.generateAndStoreOTP(user.id);
+
+      // In production, send email with OTP
+      // For now, we'll log it (in production, this should be sent via email)
+      console.log(`Password reset OTP for ${email}: ${otp}`);
+      console.log(`Reset token (after OTP verification): ${token}`);
+      
+      res.json({ 
+        message: "If the email exists, an OTP has been sent",
+        // In development, return OTP for testing. Remove in production!
+        otp: process.env.NODE_ENV === "development" ? otp : undefined
+      });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/verify-otp", async (req, res) => {
+    try {
+      const { email, otp } = req.body;
+      
+      if (!email || !otp) {
+        return res.status(400).json({ error: "Email and OTP are required" });
+      }
+
+      const result = await storage.verifyOTP(email, otp);
+      
+      if (!result.valid) {
+        return res.status(400).json({ error: "Invalid or expired OTP" });
+      }
+
+      res.json({ 
+        message: "OTP verified successfully",
+        token: result.token // Token to use for password reset
+      });
+    } catch (error) {
+      console.error("Verify OTP error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({ error: "Token and new password are required" });
+      }
+
+      // Validate password strength
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({ 
+          error: "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character" 
+        });
+      }
+
+      // Try to get user by token from OTP flow first, then fallback to resetToken
+      let user = await storage.getUserByResetTokenFromOTP(token);
+      if (!user) {
+        user = await storage.getUserByResetToken(token);
+      }
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      await storage.updateUserPassword(user.id, newPassword);
+      
+      res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      // In a session-based auth, we would destroy the session here
+      // For token-based auth, the client just removes the token
+      res.json({ message: "Logged out successfully" });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Products endpoints
   app.get("/api/products", async (req, res) => {
     try {
@@ -499,6 +601,260 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       console.error("Update company settings error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Warehouses endpoints
+  app.get("/api/warehouses", async (req, res) => {
+    try {
+      const warehouses = await storage.getAllWarehouses();
+      res.json(warehouses);
+    } catch (error) {
+      console.error("Get warehouses error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/warehouses/:id", async (req, res) => {
+    try {
+      const warehouse = await storage.getWarehouse(req.params.id);
+      if (!warehouse) {
+        return res.status(404).json({ error: "Warehouse not found" });
+      }
+      res.json(warehouse);
+    } catch (error) {
+      console.error("Get warehouse error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/warehouses", async (req, res) => {
+    try {
+      const warehouse = await storage.createWarehouse(req.body);
+      res.status(201).json(warehouse);
+    } catch (error) {
+      console.error("Create warehouse error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Receipts endpoints
+  app.get("/api/receipts", async (req, res) => {
+    try {
+      const receipts = await storage.getAllReceipts();
+      res.json(receipts);
+    } catch (error) {
+      console.error("Get receipts error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/receipts/:id", async (req, res) => {
+    try {
+      const receipt = await storage.getReceipt(req.params.id);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      console.error("Get receipt error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/receipts", async (req, res) => {
+    try {
+      const receipt = await storage.createReceipt(req.body);
+      res.status(201).json(receipt);
+    } catch (error) {
+      console.error("Create receipt error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/receipts/:id", async (req, res) => {
+    try {
+      const receipt = await storage.updateReceipt(req.params.id, req.body);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      console.error("Update receipt error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/receipts/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteReceipt(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete receipt error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Receipt Line Items endpoints
+  app.get("/api/receipts/:receiptId/line-items", async (req, res) => {
+    try {
+      const items = await storage.getReceiptLineItems(req.params.receiptId);
+      res.json(items);
+    } catch (error) {
+      console.error("Get receipt line items error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/receipts/:receiptId/line-items", async (req, res) => {
+    try {
+      const item = await storage.createReceiptLineItem({
+        ...req.body,
+        receiptId: req.params.receiptId,
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create receipt line item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/receipts/line-items/:id", async (req, res) => {
+    try {
+      const item = await storage.updateReceiptLineItem(req.params.id, req.body);
+      if (!item) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Update receipt line item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/receipts/line-items/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteReceiptLineItem(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete receipt line item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delivery Orders endpoints
+  app.get("/api/delivery-orders", async (req, res) => {
+    try {
+      const orders = await storage.getAllDeliveryOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Get delivery orders error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/delivery-orders/:id", async (req, res) => {
+    try {
+      const order = await storage.getDeliveryOrder(req.params.id);
+      if (!order) {
+        return res.status(404).json({ error: "Delivery order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Get delivery order error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/delivery-orders", async (req, res) => {
+    try {
+      const order = await storage.createDeliveryOrder(req.body);
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Create delivery order error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/delivery-orders/:id", async (req, res) => {
+    try {
+      const order = await storage.updateDeliveryOrder(req.params.id, req.body);
+      if (!order) {
+        return res.status(404).json({ error: "Delivery order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Update delivery order error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/delivery-orders/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteDeliveryOrder(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Delivery order not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete delivery order error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delivery Line Items endpoints
+  app.get("/api/delivery-orders/:deliveryId/line-items", async (req, res) => {
+    try {
+      const items = await storage.getDeliveryLineItems(req.params.deliveryId);
+      res.json(items);
+    } catch (error) {
+      console.error("Get delivery line items error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/delivery-orders/:deliveryId/line-items", async (req, res) => {
+    try {
+      const item = await storage.createDeliveryLineItem({
+        ...req.body,
+        deliveryId: req.params.deliveryId,
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Create delivery line item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/delivery-orders/line-items/:id", async (req, res) => {
+    try {
+      const item = await storage.updateDeliveryLineItem(req.params.id, req.body);
+      if (!item) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Update delivery line item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/delivery-orders/line-items/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteDeliveryLineItem(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete delivery line item error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

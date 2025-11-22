@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,80 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-// Mock products data - same as inventory page
-const mockProducts = [
-  {
-    id: "1",
-    name: "Oak Wood Plank",
-    sku: "OWP-001",
-    category: "Raw Materials",
-    unitOfMeasure: "pieces",
-    description: "High-quality oak wood planks for furniture manufacturing",
-    minimumQuantity: "50",
-    preferredSupplier: "Timber Supply Co.",
-    pricePerUnit: 12.50,
-    onHand: 450,
-    reserved: 120,
-    location: "Warehouse A - Zone 1",
-  },
-  {
-    id: "2",
-    name: "Metal Brackets Set",
-    sku: "MBS-045",
-    category: "Hardware",
-    unitOfMeasure: "pieces",
-    description: "Heavy-duty metal brackets for structural support",
-    minimumQuantity: "100",
-    preferredSupplier: "Hardware Solutions Inc.",
-    pricePerUnit: 8.75,
-    onHand: 1200,
-    reserved: 300,
-    location: "Warehouse A - Zone 2",
-  },
-  {
-    id: "3",
-    name: "Paint - White Gloss",
-    sku: "PNT-WG-5L",
-    category: "Finishing",
-    unitOfMeasure: "liters",
-    description: "Premium white gloss paint, 5L containers",
-    minimumQuantity: "10",
-    preferredSupplier: "Paint Masters Ltd.",
-    pricePerUnit: 45.00,
-    onHand: 15,
-    reserved: 10,
-    location: "Warehouse B - Zone 1",
-  },
-  {
-    id: "4",
-    name: "Pine Wood Board",
-    sku: "PWB-002",
-    category: "Raw Materials",
-    unitOfMeasure: "pieces",
-    description: "Standard pine wood boards",
-    minimumQuantity: "20",
-    preferredSupplier: "Timber Supply Co.",
-    pricePerUnit: 9.25,
-    onHand: 5,
-    reserved: 0,
-    location: "Warehouse A - Zone 1",
-  },
-  {
-    id: "5",
-    name: "Screws Box (1000 pcs)",
-    sku: "SCR-1000",
-    category: "Hardware",
-    unitOfMeasure: "boxes",
-    description: "Assorted screws, 1000 pieces per box",
-    minimumQuantity: "25",
-    preferredSupplier: "Hardware Solutions Inc.",
-    pricePerUnit: 15.99,
-    onHand: 85,
-    reserved: 25,
-    location: "Warehouse A - Zone 2",
-  },
-];
 
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
@@ -98,16 +25,25 @@ const productSchema = z.object({
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
-type Product = typeof mockProducts[0];
 
 export default function ProductForm() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedProductId, setSelectedProductId] = useState<string>("");
-  const [originalProduct, setOriginalProduct] = useState<Product | null>(null);
+  const [originalProduct, setOriginalProduct] = useState<any | null>(null);
+
+  // Fetch products
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return response.json();
+    },
+  });
 
   // Sort products alphabetically by name
-  const sortedProducts = [...mockProducts].sort((a, b) => 
+  const sortedProducts = [...products].sort((a: any, b: any) => 
     a.name.localeCompare(b.name)
   );
 
@@ -126,8 +62,8 @@ export default function ProductForm() {
 
   // Load product when selected
   useEffect(() => {
-    if (selectedProductId) {
-      const product = mockProducts.find(p => p.id === selectedProductId);
+    if (selectedProductId && products.length > 0) {
+      const product = products.find((p: any) => p.id === selectedProductId);
       if (product) {
         setOriginalProduct({ ...product });
         form.reset({
@@ -136,7 +72,7 @@ export default function ProductForm() {
           category: product.category,
           unitOfMeasure: product.unitOfMeasure,
           description: product.description || "",
-          minimumQuantity: product.minimumQuantity || "0",
+          minimumQuantity: String(product.minimumQuantity || 0),
           preferredSupplier: product.preferredSupplier || "",
         });
       }
@@ -152,7 +88,7 @@ export default function ProductForm() {
         preferredSupplier: "",
       });
     }
-  }, [selectedProductId, form]);
+  }, [selectedProductId, products, form]);
 
   const onSubmit = async (data: ProductFormData) => {
     if (!selectedProductId) {

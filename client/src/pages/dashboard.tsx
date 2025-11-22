@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Package,
   AlertTriangle,
@@ -24,117 +25,6 @@ import {
 // Get today's date for comparison
 const today = new Date();
 today.setHours(0, 0, 0, 0);
-
-// Mock data for receipts (incoming goods)
-const receipts = [
-  { id: "R1", status: "pending", scheduleDate: new Date(2024, 0, 10) },
-  { id: "R2", status: "pending", scheduleDate: new Date(2024, 0, 12) },
-  { id: "R3", status: "pending", scheduleDate: new Date(2024, 0, 14) },
-  { id: "R4", status: "pending", scheduleDate: new Date(2024, 0, 9) }, // Late
-  { id: "R5", status: "done", scheduleDate: new Date(2024, 0, 8) },
-  { id: "R6", status: "done", scheduleDate: new Date(2024, 0, 7) },
-];
-
-// Mock data for deliveries (outgoing goods)
-const deliveries = [
-  { id: "D1", status: "pending", scheduleDate: new Date(2024, 0, 11), waiting: false },
-  { id: "D2", status: "pending", scheduleDate: new Date(2024, 0, 13), waiting: true },
-  { id: "D3", status: "pending", scheduleDate: new Date(2024, 0, 9), waiting: false }, // Late
-  { id: "D4", status: "pending", scheduleDate: new Date(2024, 0, 15), waiting: true },
-  { id: "D5", status: "done", scheduleDate: new Date(2024, 0, 8), waiting: false },
-  { id: "D6", status: "done", scheduleDate: new Date(2024, 0, 7), waiting: false },
-];
-
-// Calculate metrics
-const pendingReceipts = receipts.filter(r => r.status === "pending").length;
-const lateReceipts = receipts.filter(r => r.status === "pending" && r.scheduleDate < today).length;
-const totalReceiptOperations = receipts.length;
-
-const pendingDeliveries = deliveries.filter(d => d.status === "pending").length;
-const lateDeliveries = deliveries.filter(d => d.status === "pending" && d.scheduleDate < today).length;
-const waitingDeliveries = deliveries.filter(d => d.status === "pending" && d.waiting).length;
-const totalDeliveryOperations = deliveries.length;
-
-const kpis = [
-  {
-    title: "Total Products",
-    value: "1,234",
-    icon: Package,
-    color: "text-blue-600",
-  },
-  {
-    title: "Low Stock Items",
-    value: "23",
-    icon: AlertTriangle,
-    color: "text-yellow-600",
-  },
-  {
-    title: "Pending Receipts",
-    value: "15",
-    icon: TruckIcon,
-    color: "text-green-600",
-  },
-  {
-    title: "Pending Deliveries",
-    value: "8",
-    icon: ShoppingBag,
-    color: "text-purple-600",
-  },
-  {
-    title: "Internal Transfers",
-    value: "12",
-    icon: ArrowRightLeft,
-    color: "text-orange-600",
-  },
-];
-
-const recentOperations = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    reference: "WH/IN/0023",
-    type: "Receipt",
-    warehouse: "Main Warehouse",
-    location: "Zone A",
-    status: "Done",
-  },
-  {
-    id: "2",
-    date: "2024-01-15",
-    reference: "WH/OUT/0045",
-    type: "Delivery",
-    warehouse: "Main Warehouse",
-    location: "Loading Bay",
-    status: "Ready",
-  },
-  {
-    id: "3",
-    date: "2024-01-14",
-    reference: "WH/INT/0012",
-    type: "Internal",
-    warehouse: "Main Warehouse",
-    location: "Zone A → Zone B",
-    status: "In Progress",
-  },
-  {
-    id: "4",
-    date: "2024-01-14",
-    reference: "WH/ADJ/0008",
-    type: "Adjustment",
-    warehouse: "Main Warehouse",
-    location: "Zone C",
-    status: "Done",
-  },
-  {
-    id: "5",
-    date: "2024-01-13",
-    reference: "WH/IN/0022",
-    type: "Receipt",
-    warehouse: "Secondary Warehouse",
-    location: "Receiving",
-    status: "Waiting",
-  },
-];
 
 const statusColors: Record<string, string> = {
   Draft: "bg-gray-100 text-gray-800",
@@ -150,8 +40,128 @@ const statusColors: Record<string, string> = {
 export default function Dashboard() {
   const [expandedSection, setExpandedSection] = useState<"receipts" | "deliveries" | null>(null);
 
-  const getStatusLabel = (scheduleDate: Date) => {
-    if (scheduleDate < today) return "Late";
+  // Fetch products
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch receipts
+  const { data: receipts = [] } = useQuery({
+    queryKey: ["receipts"],
+    queryFn: async () => {
+      const response = await fetch("/api/receipts");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch delivery orders
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ["delivery-orders"],
+    queryFn: async () => {
+      const response = await fetch("/api/delivery-orders");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch stock moves
+  const { data: stockMoves = [] } = useQuery({
+    queryKey: ["stock-moves"],
+    queryFn: async () => {
+      const response = await fetch("/api/stock-moves");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Calculate metrics
+  const totalProducts = products.length;
+  const lowStockItems = products.filter((p: any) => 
+    (p.onHandQuantity || 0) <= (p.minimumQuantity || 0)
+  ).length;
+
+  const pendingReceipts = receipts.filter((r: any) => 
+    r.status === "Draft" || r.status === "Ready"
+  ).length;
+  const lateReceipts = receipts.filter((r: any) => {
+    if (r.status === "Done") return false;
+    if (!r.scheduledDate) return false;
+    const scheduleDate = new Date(r.scheduledDate);
+    scheduleDate.setHours(0, 0, 0, 0);
+    return scheduleDate < today;
+  }).length;
+  const totalReceiptOperations = receipts.length;
+
+  const pendingDeliveries = deliveries.filter((d: any) => 
+    d.status === "Picked" || d.status === "Packed"
+  ).length;
+  const lateDeliveries = deliveries.filter((d: any) => {
+    if (d.status === "Validated") return false;
+    if (!d.deliveryDate) return false;
+    const deliveryDate = new Date(d.deliveryDate);
+    deliveryDate.setHours(0, 0, 0, 0);
+    return deliveryDate < today;
+  }).length;
+  const totalDeliveryOperations = deliveries.length;
+
+  const internalTransfers = stockMoves.filter((m: any) => m.type === "Internal").length;
+
+  const kpis = [
+    {
+      title: "Total Products",
+      value: totalProducts.toString(),
+      icon: Package,
+      color: "text-blue-600",
+    },
+    {
+      title: "Low Stock Items",
+      value: lowStockItems.toString(),
+      icon: AlertTriangle,
+      color: "text-yellow-600",
+    },
+    {
+      title: "Pending Receipts",
+      value: pendingReceipts.toString(),
+      icon: TruckIcon,
+      color: "text-green-600",
+    },
+    {
+      title: "Pending Deliveries",
+      value: pendingDeliveries.toString(),
+      icon: ShoppingBag,
+      color: "text-purple-600",
+    },
+    {
+      title: "Internal Transfers",
+      value: internalTransfers.toString(),
+      icon: ArrowRightLeft,
+      color: "text-orange-600",
+    },
+  ];
+
+  // Recent operations from stock moves
+  const recentOperations = stockMoves
+    .slice(0, 5)
+    .map((move: any) => ({
+      id: move.id,
+      date: move.date ? new Date(move.date).toISOString().split('T')[0] : "",
+      reference: move.reference,
+      type: move.type,
+      warehouse: move.toLocation,
+      location: `${move.fromLocation} → ${move.toLocation}`,
+      status: move.status,
+    }));
+
+  const getStatusLabel = (scheduleDate: Date | string) => {
+    const date = scheduleDate instanceof Date ? scheduleDate : new Date(scheduleDate);
+    date.setHours(0, 0, 0, 0);
+    if (date < today) return "Late";
     return "Upcoming";
   };
 
@@ -222,27 +232,30 @@ export default function Dashboard() {
               <div className="mt-4 pt-4 border-t space-y-2" data-testid="section-receipts-details">
                 <div className="text-sm font-semibold mb-3">Pending Receipts Details</div>
                 {receipts
-                  .filter(r => r.status === "pending")
-                  .map((receipt) => (
-                    <div
-                      key={receipt.id}
-                      className="p-3 bg-muted rounded-md text-sm"
-                      data-testid={`receipt-detail-${receipt.id}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{receipt.id}</span>
-                        <Badge
-                          variant="secondary"
-                          className={getStatusLabel(receipt.scheduleDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
-                        >
-                          {getStatusLabel(receipt.scheduleDate)}
-                        </Badge>
+                  .filter((r: any) => r.status === "Draft" || r.status === "Ready")
+                  .map((receipt: any) => {
+                    const scheduleDate = receipt.scheduledDate ? new Date(receipt.scheduledDate) : new Date();
+                    return (
+                      <div
+                        key={receipt.id}
+                        className="p-3 bg-muted rounded-md text-sm"
+                        data-testid={`receipt-detail-${receipt.id}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{receipt.receiptNumber}</span>
+                          <Badge
+                            variant="secondary"
+                            className={getStatusLabel(scheduleDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
+                          >
+                            {getStatusLabel(scheduleDate)}
+                          </Badge>
+                        </div>
+                        <div className="text-muted-foreground mt-1">
+                          Schedule: {scheduleDate.toLocaleDateString()}
+                        </div>
                       </div>
-                      <div className="text-muted-foreground mt-1">
-                        Schedule: {receipt.scheduleDate.toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </CardContent>
@@ -275,12 +288,6 @@ export default function Dashboard() {
               <span className="text-sm text-muted-foreground">Late</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-yellow-600 font-semibold text-lg">
-                {waitingDeliveries}
-              </span>
-              <span className="text-sm text-muted-foreground">waiting</span>
-            </div>
-            <div className="flex items-center gap-2">
               <span className="text-blue-600 font-semibold text-lg">
                 {totalDeliveryOperations}
               </span>
@@ -291,34 +298,39 @@ export default function Dashboard() {
               <div className="mt-4 pt-4 border-t space-y-2" data-testid="section-deliveries-details">
                 <div className="text-sm font-semibold mb-3">Pending Deliveries Details</div>
                 {deliveries
-                  .filter(d => d.status === "pending")
-                  .map((delivery) => (
-                    <div
-                      key={delivery.id}
-                      className="p-3 bg-muted rounded-md text-sm"
-                      data-testid={`delivery-detail-${delivery.id}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{delivery.id}</span>
-                        <div className="flex gap-2">
-                          <Badge
-                            variant="secondary"
-                            className={getStatusLabel(delivery.scheduleDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
-                          >
-                            {getStatusLabel(delivery.scheduleDate)}
-                          </Badge>
-                          {delivery.waiting && (
-                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                              Waiting
+                  .filter((d: any) => d.status === "Picked" || d.status === "Packed")
+                  .map((delivery: any) => {
+                    const deliveryDate = delivery.deliveryDate ? new Date(delivery.deliveryDate) : new Date();
+                    return (
+                      <div
+                        key={delivery.id}
+                        className="p-3 bg-muted rounded-md text-sm"
+                        data-testid={`delivery-detail-${delivery.id}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{delivery.deliveryNumber}</span>
+                          <div className="flex gap-2">
+                            <Badge
+                              variant="secondary"
+                              className={getStatusLabel(deliveryDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
+                            >
+                              {getStatusLabel(deliveryDate)}
                             </Badge>
-                          )}
+                            <Badge variant="secondary" className={
+                              delivery.status === "Picked" ? "bg-blue-100 text-blue-800" :
+                              delivery.status === "Packed" ? "bg-yellow-100 text-yellow-800" :
+                              "bg-green-100 text-green-800"
+                            }>
+                              {delivery.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="text-muted-foreground mt-1">
+                          Delivery Date: {deliveryDate.toLocaleDateString()}
                         </div>
                       </div>
-                      <div className="text-muted-foreground mt-1">
-                        Schedule: {delivery.scheduleDate.toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </CardContent>

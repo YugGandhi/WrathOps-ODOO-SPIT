@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,83 +29,28 @@ interface DeliveryLineItem {
   pricePerUnit: number;
 }
 
-// Mock products for delivery
-const mockProducts = [
-  { id: "1", name: "Oak Wood Plank", sku: "OWP-001", pricePerUnit: 12.50 },
-  { id: "2", name: "Metal Brackets Set", sku: "MBS-045", pricePerUnit: 8.75 },
-  { id: "3", name: "Paint - White Gloss", sku: "PNT-WG-5L", pricePerUnit: 45.00 },
-  { id: "4", name: "Screws Box (1000 pcs)", sku: "SCR-1000", pricePerUnit: 15.99 },
-  { id: "5", name: "Pine Wood Board", sku: "PWB-002", pricePerUnit: 9.25 },
-  { id: "6", name: "Steel Rods", sku: "STR-001", pricePerUnit: 18.50 },
-];
-
-// Mock customers
-const mockCustomers = [
-  { id: "1", name: "ABC Corporation" },
-  { id: "2", name: "XYZ Limited" },
-  { id: "3", name: "Global Traders Inc." },
-  { id: "4", name: "Tech Solutions Ltd." },
-];
-
-// Mock existing delivery orders to generate next delivery number
-const existingDeliveries = [
-  "DO/2024/0001",
-  "DO/2024/0002",
-  "DO/2024/0003",
-  "DO/2024/0004",
-];
-
-// Mock delivery orders for editing
-const mockDeliveryOrders = [
-  {
-    id: "1",
-    deliveryNumber: "DO/2024/0001",
-    customerId: "1",
-    customer: "ABC Corporation",
-    deliveryDate: "2024-01-12",
-    status: "Picked",
-    lineItems: [
-      { productId: "1", productName: "Oak Wood Plank", sku: "OWP-001", quantityPicked: 50, quantityPacked: 0, pricePerUnit: 12.50 },
-      { productId: "2", productName: "Metal Brackets Set", sku: "MBS-045", quantityPicked: 30, quantityPacked: 0, pricePerUnit: 8.75 },
-    ],
-  },
-  {
-    id: "2",
-    deliveryNumber: "DO/2024/0002",
-    customerId: "2",
-    customer: "XYZ Limited",
-    deliveryDate: "2024-01-14",
-    status: "Packed",
-    lineItems: [
-      { productId: "3", productName: "Paint - White Gloss", sku: "PNT-WG-5L", quantityPicked: 20, quantityPacked: 20, pricePerUnit: 45.00 },
-      { productId: "4", productName: "Screws Box (1000 pcs)", sku: "SCR-1000", quantityPicked: 15, quantityPacked: 15, pricePerUnit: 15.99 },
-    ],
-  },
-  {
-    id: "3",
-    deliveryNumber: "DO/2024/0003",
-    customerId: "3",
-    customer: "Global Traders Inc.",
-    deliveryDate: "2024-01-15",
-    status: "Validated",
-    lineItems: [
-      { productId: "6", productName: "Steel Rods", sku: "STR-001", quantityPicked: 30, quantityPacked: 30, pricePerUnit: 18.50 },
-    ],
-  },
-];
-
 // Function to generate next delivery number
-const generateDeliveryNumber = () => {
+const generateDeliveryNumber = async (): Promise<string> => {
   const currentYear = new Date().getFullYear();
   const yearPrefix = `DO/${currentYear}/`;
   
-  const numbers = existingDeliveries
-    .filter(d => d.startsWith(yearPrefix))
-    .map(d => parseInt(d.replace(yearPrefix, "")))
-    .filter(n => !isNaN(n));
+  try {
+    const response = await fetch("/api/delivery-orders");
+    if (response.ok) {
+      const deliveries = await response.json();
+      const numbers = deliveries
+        .filter((d: any) => d.deliveryNumber?.startsWith(yearPrefix))
+        .map((d: any) => parseInt(d.deliveryNumber.replace(yearPrefix, "")))
+        .filter((n: number) => !isNaN(n));
+      
+      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      return `${yearPrefix}${String(nextNumber).padStart(4, "0")}`;
+    }
+  } catch (error) {
+    console.error("Failed to fetch deliveries for number generation", error);
+  }
   
-  const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-  return `${yearPrefix}${String(nextNumber).padStart(4, "0")}`;
+  return `${yearPrefix}0001`;
 };
 
 export default function DeliveryForm() {
@@ -119,6 +65,50 @@ export default function DeliveryForm() {
     { id: "1", productId: "", productName: "", quantityPicked: 0, quantityPacked: 0, pricePerUnit: 0 }
   ]);
 
+  // Fetch products
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await fetch("/api/products");
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return response.json();
+    },
+  });
+
+  // Fetch customers
+  const { data: customers = [] } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const response = await fetch("/api/contacts?type=Customer");
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Fetch delivery order if editing
+  const { data: deliveryOrder } = useQuery({
+    queryKey: ["delivery-order", deliveryId],
+    queryFn: async () => {
+      if (!deliveryId) return null;
+      const response = await fetch(`/api/delivery-orders/${deliveryId}`);
+      if (!response.ok) throw new Error("Failed to fetch delivery order");
+      return response.json();
+    },
+    enabled: !!isEdit && !!deliveryId,
+  });
+
+  // Fetch delivery line items if editing
+  const { data: deliveryLineItems = [] } = useQuery({
+    queryKey: ["delivery-line-items", deliveryId],
+    queryFn: async () => {
+      if (!deliveryId) return [];
+      const response = await fetch(`/api/delivery-orders/${deliveryId}/line-items`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!isEdit && !!deliveryId,
+  });
+
   const form = useForm({
     defaultValues: {
       deliveryNumber: "",
@@ -129,31 +119,44 @@ export default function DeliveryForm() {
 
   // Load delivery data if editing
   useEffect(() => {
-    if (isEdit && deliveryId) {
-      const delivery = mockDeliveryOrders.find(d => d.id === deliveryId);
-      if (delivery) {
-        form.reset({
-          deliveryNumber: delivery.deliveryNumber,
-          customerId: delivery.customerId,
-          deliveryDate: delivery.deliveryDate,
-        });
-        setCurrentStatus(delivery.status as "Picked" | "Packed" | "Validated");
-        setLineItems(delivery.lineItems.map((item, index) => ({
-          id: String(index + 1),
-          productId: item.productId,
-          productName: item.productName,
-          quantityPicked: item.quantityPicked,
-          quantityPacked: item.quantityPacked,
-          pricePerUnit: item.pricePerUnit,
-        })));
-      }
-    } else {
+    if (isEdit && deliveryOrder) {
+      const deliveryDate = deliveryOrder.deliveryDate 
+        ? new Date(deliveryOrder.deliveryDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      
+      form.reset({
+        deliveryNumber: deliveryOrder.deliveryNumber,
+        customerId: deliveryOrder.customerId,
+        deliveryDate,
+      });
+      setCurrentStatus(deliveryOrder.status as "Picked" | "Packed" | "Validated");
+    } else if (!isEdit) {
       // Auto-generate delivery number for new orders
-      const deliveryNumber = generateDeliveryNumber();
-      form.setValue("deliveryNumber", deliveryNumber);
+      generateDeliveryNumber().then((number) => {
+        form.setValue("deliveryNumber", number);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, deliveryId]);
+  }, [isEdit, deliveryOrder]);
+
+  // Load line items when delivery order and products are loaded
+  useEffect(() => {
+    if (isEdit && deliveryLineItems.length > 0 && products.length > 0) {
+      const items = deliveryLineItems.map((item: any, index: number) => {
+        const product = products.find((p: any) => p.id === item.productId);
+        return {
+          id: item.id || String(index + 1),
+          productId: item.productId,
+          productName: product?.name || "",
+          quantityPicked: item.quantityPicked || 0,
+          quantityPacked: item.quantityPacked || 0,
+          pricePerUnit: item.pricePerUnit ? parseFloat(item.pricePerUnit) : (product?.pricePerUnit ? parseFloat(product.pricePerUnit) : 0),
+        };
+      });
+      setLineItems(items.length > 0 ? items : [{ id: "1", productId: "", productName: "", quantityPicked: 0, quantityPacked: 0, pricePerUnit: 0 }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, deliveryLineItems, products]);
 
   const addLineItem = () => {
     setLineItems([
@@ -170,12 +173,12 @@ export default function DeliveryForm() {
     setLineItems(lineItems.map(item => {
       if (item.id === id) {
         if (field === "productId") {
-          const product = mockProducts.find(p => p.id === value);
-          return { 
-            ...item, 
-            [field]: value, 
+          const product = products.find((p: any) => p.id === value);
+          return {
+            ...item,
+            [field]: value,
             productName: product?.name || "",
-            pricePerUnit: product?.pricePerUnit || 0
+            pricePerUnit: product?.pricePerUnit ? parseFloat(product.pricePerUnit) : 0
           };
         }
         // When packing, ensure packed quantity doesn't exceed picked quantity
@@ -357,7 +360,7 @@ export default function DeliveryForm() {
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockCustomers.map((customer) => (
+                      {customers.map((customer: any) => (
                         <SelectItem key={customer.id} value={customer.id}>
                           {customer.name}
                         </SelectItem>
@@ -430,7 +433,7 @@ export default function DeliveryForm() {
                                 <SelectValue placeholder="Select product" />
                               </SelectTrigger>
                               <SelectContent>
-                                {mockProducts.map((product) => (
+                                {products.map((product: any) => (
                                   <SelectItem key={product.id} value={product.id}>
                                     {product.name} ({product.sku})
                                   </SelectItem>
