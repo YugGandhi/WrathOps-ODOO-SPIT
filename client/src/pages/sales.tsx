@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { Search, Plus } from "lucide-react";
 
 // Mock data
@@ -59,6 +70,24 @@ const statusColors: Record<string, string> = {
 
 export default function Sales() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [orders, setOrders] = useState(salesOrders);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [newStatus, setNewStatus] = useState("");
+
+  const handleStatusChange = (orderId: string, status: string) => {
+    setOrders(orders.map(order =>
+      order.id === orderId ? { ...order, status } : order
+    ));
+    toast({
+      title: "Status updated",
+      description: `Order status changed to ${status}`,
+    });
+    setOpenOrderId(null);
+    setNewStatus("");
+  };
+
+  const currentOrder = openOrderId ? orders.find(o => o.id === openOrderId) : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -125,7 +154,7 @@ export default function Sales() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {salesOrders.map((order) => (
+                {orders.map((order) => (
                   <TableRow
                     key={order.id}
                     className="cursor-pointer hover-elevate"
@@ -140,8 +169,12 @@ export default function Sales() {
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={statusColors[order.status]}
+                        className={`${statusColors[order.status]} cursor-pointer`}
                         data-testid={`badge-status-${order.id}`}
+                        onClick={() => {
+                          setOpenOrderId(order.id);
+                          setNewStatus(order.status);
+                        }}
                       >
                         {order.status}
                       </Badge>
@@ -153,6 +186,47 @@ export default function Sales() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!openOrderId} onOpenChange={(open) => {
+        if (!open) setOpenOrderId(null);
+      }}>
+        <DialogContent data-testid="dialog-change-so-status">
+          <DialogHeader>
+            <DialogTitle>Change Order Status</DialogTitle>
+            <DialogDescription>
+              {currentOrder && `Update the status for sales order ${currentOrder.reference}`}
+            </DialogDescription>
+          </DialogHeader>
+          {currentOrder && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">New Status</Label>
+                <Select
+                  value={newStatus}
+                  onValueChange={setNewStatus}
+                >
+                  <SelectTrigger id="status" data-testid="select-new-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Draft">Draft</SelectItem>
+                    <SelectItem value="Confirmed">Confirmed</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Canceled">Canceled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={() => handleStatusChange(currentOrder.id, newStatus)}
+                className="w-full"
+                data-testid="button-confirm-status"
+              >
+                Update Status
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
