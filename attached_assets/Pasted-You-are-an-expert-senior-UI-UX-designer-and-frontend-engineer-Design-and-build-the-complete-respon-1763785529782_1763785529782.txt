@@ -1,0 +1,314 @@
+You are an expert senior UI/UX designer and frontend engineer.
+
+Design and build the complete responsive web UI for a product called **StockMaster – Inventory & Stock Management System**.
+
+### General Requirements
+- Platform: Modern responsive web app (desktop-first, but also usable on tablet and mobile).
+- Style: Clean, professional dashboard style. Neutral colors, soft shadows, clear typography, good spacing. Think SaaS admin panel.
+- Layout:
+  - Left sidebar for main navigation.
+  - Top bar for search, notifications, and user profile.
+  - Main content area with cards, tables, and forms.
+- Use a consistent design system: buttons, inputs, tables, tabs, modals, badges, status chips.
+
+### Global Navigation (Sidebar)
+Main sections in the left sidebar:
+- Dashboard
+- Inventory
+- Manufacturing
+- Stock Move
+- Purchase
+- Sales
+- Contacts
+- Settings
+
+Also include a user profile menu (top-right or in sidebar footer) with:
+- My Profile
+- Logout
+
+Add icons for each menu item.
+
+---
+
+## 1. Authentication Flow
+
+### 1.1 Login Page
+Create a **Login Page** with:
+- App logo + app name: “StockMaster”
+- Input fields:
+  - Login ID
+  - Password
+- Links:
+  - “Forget Password?”
+  - “Sign Up”
+- Primary button:
+  - SIGN IN
+
+States:
+- Show inline validation errors for missing fields or wrong credentials.
+- Show a generic error message area above the form.
+- On successful login, redirect to the **Dashboard**.
+
+### 1.2 Sign Up Page
+Create a **Sign Up Page** with:
+- Fields:
+  - Enter Login ID
+  - Enter Password
+  - Re-enter Password
+  - Enter Email ID
+- SIGN UP button
+
+Validation rules (show errors in UI):
+- Email must be in proper email format.
+- Password must:
+  - Be longer than 8 characters.
+  - Contain uppercase, lowercase, numbers, and special characters.
+- Re-entered password must match.
+
+After successful sign up:
+- Show a success toast/alert.
+- Redirect to the Login page.
+
+### 1.3 Forget Password Page
+Create a **Forget Password** flow:
+- Step 1: Page with “Enter Email” field and “Next” button.
+- Step 2: OTP or reset link confirmation state (UI for OTP entry or message telling user to check email).
+- Step 3: Reset Password form with:
+  - New Password
+  - Confirm New Password
+- Show success message when password is updated.
+
+---
+
+## 2. Main Dashboard
+
+Create a **Dashboard** page that is the landing page after login.
+
+Show key KPIs at the top in cards:
+- Total Products in Stock
+- Low Stock / Out of Stock Items
+- Pending Receipts
+- Pending Deliveries
+- Internal Transfers Scheduled
+
+Below KPIs:
+- Recent operations table or timeline (last receipts, deliveries, internal transfers, adjustments).
+- Filters area (horizontal or left side) with:
+  - Document Type: Receipts / Delivery / Internal / Adjustments
+  - Status: Draft / Waiting / Ready / Done / Canceled
+  - Warehouse / Location
+  - Product Category
+
+Each row in the operations table should show:
+- Date
+- Reference
+- Type (Receipt / Delivery / Internal / Adjustment)
+- Warehouse / Locations
+- Status as a colored badge.
+
+---
+
+## 3. Inventory Module
+
+### 3.1 Product List Page
+Create an **Inventory → Product List** page with:
+- Search bar (by name, SKU).
+- Filters:
+  - Warehouse / Location
+  - Product Category
+  - Low stock filter (e.g., “Show only low stock”).
+- Table columns:
+  - Product Name
+  - SKU / Code
+  - Category
+  - On-hand Quantity
+  - Reserved Quantity
+  - Forecasted Quantity
+  - Location
+- Actions per row:
+  - View Details
+  - Edit Product
+  - Adjust Quantity (opens modal or side panel)
+
+### 3.2 Product Details Page
+When user clicks a product:
+- Show product details with sections/cards:
+  - Basic Info: Name, SKU, Category, Unit of Measure, Description.
+  - Stock Info: On-hand, Reserved, Forecasted, Reordering rules.
+  - Locations: List of warehouses/locations where it is stored.
+  - Lots / Batches if applicable.
+- Include:
+  - “Update Quantity” action that opens a modal to perform stock adjustment.
+  - “Stock History / Move History” tab or section showing past operations for this product.
+
+### 3.3 Create / Edit Product Form
+Form fields:
+- Name
+- SKU / Code
+- Category (dropdown)
+- Unit of Measure (dropdown)
+- Initial Stock (optional)
+- Description
+- Reordering rules: Minimum quantity, preferred supplier (optional).
+
+Include Save / Cancel buttons, and validation states.
+
+---
+
+## 4. Manufacturing Module
+
+### 4.1 Manufacturing Orders List
+Create a **Manufacturing** list view with:
+- Search (by Reference, Contact).
+- Filters (by Status, Date).
+- Columns:
+  - Reference (e.g., WH/MO/0001)
+  - Contact (customer or internal)
+  - Schedule Date
+  - Status (e.g., Draft, Ready, In Progress, Done)
+- Ability to switch between:
+  - Table View
+  - Kanban View (grouped by Status, with cards for each Manufacturing Order).
+
+### 4.2 Manufacturing Order Details
+When a user opens an MO:
+- Use tabs:
+  - Overview
+  - Components
+  - Operations
+  - Misc
+
+**Overview tab:**
+- Show Reference, Contact, Schedule Date, Status, Quantity, Unit of Measure.
+
+**Components tab:**
+- Table of required raw materials with:
+  - Component Name
+  - Required Quantity
+  - Available Quantity
+  - Unit of Measure
+
+**Operations tab:**
+- List of operations like:
+  - Wood Cutting
+  - Assembly
+  - Inspection
+- Each operation row/card should support:
+  - Start, Pause, Done buttons.
+  - Status indicator.
+
+Add a “Validate Manufacturing Order” button on the page.
+
+---
+
+## 5. Stock Move Module
+
+Create a **Stock Move** list page to show stock movements:
+- Columns:
+  - Date
+  - Reference
+  - From Location
+  - To Location
+  - Quantity
+  - Status
+- Search and filters (by date, reference, location, status).
+- On click of a row, show details (e.g., side panel or separate page) with full move history and related document.
+
+---
+
+## 6. Purchase Module
+
+Create a **Purchase Orders** page:
+- List view with:
+  - Vendor
+  - Reference
+  - Order Date
+  - Total
+  - Status (Draft, Confirmed, Received, Canceled)
+- Button: “Create Purchase Order”.
+
+**Create / Edit Purchase Order form:**
+- Header fields: Vendor, Order Date, Reference.
+- Line items table:
+  - Product (select)
+  - Quantity
+  - Unit Price
+  - Subtotal
+- Show totals (Net total).
+- Actions: Save Draft, Confirm, Send to Vendor, Receive Products.
+
+---
+
+## 7. Sales Module
+
+Create a **Sales Orders** page:
+- List with:
+  - Customer
+  - Reference
+  - Order Date
+  - Total
+  - Status (Draft, Confirmed, Delivered, Canceled)
+
+**Create / Edit Sales Order form:**
+- Header fields: Customer, Order Date, Reference.
+- Line items table:
+  - Product
+  - Quantity
+  - Unit Price
+  - Subtotal
+- Actions: Save Draft, Confirm, Deliver.
+- Once Confirmed, show link or button to related Delivery Order.
+
+---
+
+## 8. Contacts Module
+
+Create a **Contacts** page:
+- Search bar.
+- Table or cards with:
+  - Name
+  - Phone
+  - Email
+  - Address
+- Actions:
+  - Add Contact (opens form).
+  - Edit Contact.
+  - View details.
+
+Contact form fields:
+- Name
+- Phone
+- Email
+- Address (line, city, state, pincode, country).
+
+---
+
+## 9. Settings Module
+
+Create a **Settings → Company Profile** page with a form:
+- Company Name
+- Email
+- Phone
+- Address
+- Country
+- State
+- Pincode
+- Building No / Street
+
+Buttons:
+- Edit (enable fields)
+- Save (persist changes)
+- Cancel.
+
+---
+
+## 10. Global UX Details
+
+- Add loading states (skeletons/spinners) for all main data tables and big actions.
+- Use consistent modals for:
+  - Confirmations (e.g., validate MO, delete record).
+  - Stock adjustment.
+  - Add/Edit forms.
+- Use tooltips where needed for status badges and icons.
+- Use pagination for large tables (Inventory, Orders, Moves).
+- Everything should look like a polished production-ready SaaS dashboard UI for stock and inventory management.
