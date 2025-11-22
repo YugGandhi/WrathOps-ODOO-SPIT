@@ -24,7 +24,7 @@ const products = [
     category: "Raw Materials",
     onHand: 450,
     reserved: 120,
-    forecasted: 600,
+    pricePerUnit: 12.50,
     location: "Warehouse A - Zone 1",
   },
   {
@@ -34,7 +34,7 @@ const products = [
     category: "Hardware",
     onHand: 1200,
     reserved: 300,
-    forecasted: 1500,
+    pricePerUnit: 8.75,
     location: "Warehouse A - Zone 2",
   },
   {
@@ -44,7 +44,7 @@ const products = [
     category: "Finishing",
     onHand: 15,
     reserved: 10,
-    forecasted: 50,
+    pricePerUnit: 45.00,
     location: "Warehouse B - Zone 1",
   },
   {
@@ -54,7 +54,7 @@ const products = [
     category: "Hardware",
     onHand: 85,
     reserved: 25,
-    forecasted: 100,
+    pricePerUnit: 15.99,
     location: "Warehouse A - Zone 2",
   },
   {
@@ -64,7 +64,7 @@ const products = [
     category: "Raw Materials",
     onHand: 5,
     reserved: 0,
-    forecasted: 200,
+    pricePerUnit: 9.25,
     location: "Warehouse A - Zone 1",
   },
 ];
@@ -73,8 +73,9 @@ export default function Inventory() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getLowStockBadge = (onHand: number, forecasted: number) => {
-    if (onHand <= forecasted * 0.2) {
+  const getLowStockBadge = (onHand: number) => {
+    // Low stock threshold: less than 10 units
+    if (onHand < 10) {
       return (
         <Badge variant="destructive" className="text-xs">
           Low Stock
@@ -162,65 +163,72 @@ export default function Inventory() {
                   <TableHead>Category</TableHead>
                   <TableHead className="text-right">On Hand</TableHead>
                   <TableHead className="text-right">Reserved</TableHead>
-                  <TableHead className="text-right">Forecasted</TableHead>
+                  <TableHead className="text-right">Free to Use</TableHead>
+                  <TableHead className="text-right">Price per Unit Cost</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {product.name}
-                        {getLowStockBadge(product.onHand, product.forecasted)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {product.sku}
-                    </TableCell>
-                    <TableCell className="text-sm">{product.category}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {product.onHand}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {product.reserved}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {product.forecasted}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {product.location}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/inventory/${product.id}`)}
-                          data-testid={`button-view-${product.id}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/inventory/${product.id}/edit`)}
-                          data-testid={`button-edit-${product.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-testid={`button-adjust-${product.id}`}
-                        >
-                          <Settings className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {products.map((product) => {
+                  const freeToUse = product.onHand - product.reserved;
+                  return (
+                    <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {product.name}
+                          {getLowStockBadge(product.onHand)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {product.sku}
+                      </TableCell>
+                      <TableCell className="text-sm">{product.category}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {product.onHand}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {product.reserved}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {freeToUse}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ${product.pricePerUnit.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {product.location}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/inventory/${product.id}`)}
+                            data-testid={`button-view-${product.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setLocation(`/inventory/${product.id}/edit`)}
+                            data-testid={`button-edit-${product.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-testid={`button-adjust-${product.id}`}
+                          >
+                            <Settings className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

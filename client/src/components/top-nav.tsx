@@ -25,7 +25,7 @@ const navigationItems = [
     url: "/operations",
     submenu: [
       { title: "Receipt", url: "/purchase" },
-      { title: "Delivery", url: "/sales" },
+      { title: "Delivery", url: "/delivery" },
       { title: "Adjustment", url: "/stock-moves" },
     ],
   },
@@ -143,7 +143,7 @@ export function TopNav() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => setLocation("/sales")}
+              onClick={() => setLocation("/delivery")}
               data-testid="submenu-delivery"
             >
               2. Delivery

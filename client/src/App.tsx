@@ -22,8 +22,12 @@ import StockMoves from "@/pages/stock-moves";
 import StockMoveForm from "@/pages/stock-move-form";
 import Purchase from "@/pages/purchase";
 import PurchaseOrderForm from "@/pages/purchase-form";
+import ReceiptDetails from "@/pages/receipt-details";
 import Sales from "@/pages/sales";
 import SalesOrderForm from "@/pages/sales-form";
+import Delivery from "@/pages/delivery";
+import DeliveryForm from "@/pages/delivery-form";
+import DeliveryDetails from "@/pages/delivery-details";
 import Contacts from "@/pages/contacts";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -65,10 +69,18 @@ function AppRouter() {
       {/* Purchase */}
       <Route path="/purchase" component={Purchase} />
       <Route path="/purchase/new" component={PurchaseOrderForm} />
+      <Route path="/purchase/:id/edit" component={PurchaseOrderForm} />
+      <Route path="/purchase/receipt/:id" component={ReceiptDetails} />
       
       {/* Sales */}
       <Route path="/sales" component={Sales} />
       <Route path="/sales/new" component={SalesOrderForm} />
+      
+      {/* Delivery */}
+      <Route path="/delivery" component={Delivery} />
+      <Route path="/delivery/new" component={DeliveryForm} />
+      <Route path="/delivery/:id/edit" component={DeliveryForm} />
+      <Route path="/delivery/:id" component={DeliveryDetails} />
       
       {/* Contacts */}
       <Route path="/contacts" component={Contacts} />
