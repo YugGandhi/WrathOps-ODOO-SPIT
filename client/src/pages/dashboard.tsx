@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useState } from "react";
 import {
   Package,
   AlertTriangle,
@@ -142,9 +143,18 @@ const statusColors: Record<string, string> = {
   "In Progress": "bg-purple-100 text-purple-800",
   Done: "bg-green-100 text-green-800",
   Canceled: "bg-red-100 text-red-800",
+  pending: "bg-blue-100 text-blue-800",
+  done: "bg-green-100 text-green-800",
 };
 
 export default function Dashboard() {
+  const [expandedSection, setExpandedSection] = useState<"receipts" | "deliveries" | null>(null);
+
+  const getStatusLabel = (scheduleDate: Date) => {
+    if (scheduleDate < today) return "Late";
+    return "Upcoming";
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -186,8 +196,9 @@ export default function Dashboard() {
           <CardContent className="space-y-3">
             <Button
               variant="ghost"
-              className="w-full justify-start text-base font-semibold"
+              className="w-full justify-start text-base font-semibold hover-elevate"
               data-testid="button-pending-receipts"
+              onClick={() => setExpandedSection(expandedSection === "receipts" ? null : "receipts")}
             >
               <span className="text-2xl font-bold text-green-600 mr-2">
                 {pendingReceipts}
@@ -206,6 +217,34 @@ export default function Dashboard() {
               </span>
               <span className="text-sm text-muted-foreground">operations</span>
             </div>
+
+            {expandedSection === "receipts" && (
+              <div className="mt-4 pt-4 border-t space-y-2" data-testid="section-receipts-details">
+                <div className="text-sm font-semibold mb-3">Pending Receipts Details</div>
+                {receipts
+                  .filter(r => r.status === "pending")
+                  .map((receipt) => (
+                    <div
+                      key={receipt.id}
+                      className="p-3 bg-muted rounded-md text-sm"
+                      data-testid={`receipt-detail-${receipt.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{receipt.id}</span>
+                        <Badge
+                          variant="secondary"
+                          className={getStatusLabel(receipt.scheduleDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
+                        >
+                          {getStatusLabel(receipt.scheduleDate)}
+                        </Badge>
+                      </div>
+                      <div className="text-muted-foreground mt-1">
+                        Schedule: {receipt.scheduleDate.toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -220,8 +259,9 @@ export default function Dashboard() {
           <CardContent className="space-y-3">
             <Button
               variant="ghost"
-              className="w-full justify-start text-base font-semibold"
+              className="w-full justify-start text-base font-semibold hover-elevate"
               data-testid="button-pending-deliveries"
+              onClick={() => setExpandedSection(expandedSection === "deliveries" ? null : "deliveries")}
             >
               <span className="text-2xl font-bold text-purple-600 mr-2">
                 {pendingDeliveries}
@@ -246,6 +286,41 @@ export default function Dashboard() {
               </span>
               <span className="text-sm text-muted-foreground">operations</span>
             </div>
+
+            {expandedSection === "deliveries" && (
+              <div className="mt-4 pt-4 border-t space-y-2" data-testid="section-deliveries-details">
+                <div className="text-sm font-semibold mb-3">Pending Deliveries Details</div>
+                {deliveries
+                  .filter(d => d.status === "pending")
+                  .map((delivery) => (
+                    <div
+                      key={delivery.id}
+                      className="p-3 bg-muted rounded-md text-sm"
+                      data-testid={`delivery-detail-${delivery.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{delivery.id}</span>
+                        <div className="flex gap-2">
+                          <Badge
+                            variant="secondary"
+                            className={getStatusLabel(delivery.scheduleDate) === "Late" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}
+                          >
+                            {getStatusLabel(delivery.scheduleDate)}
+                          </Badge>
+                          {delivery.waiting && (
+                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                              Waiting
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-muted-foreground mt-1">
+                        Schedule: {delivery.scheduleDate.toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
